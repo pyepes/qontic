@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Deploy: hydrogen-atom → bonner-gpu",
+      "type": "shell",
+      "command": "rsync -az --info=progress2 hydrogen-atom/hydrogen-3d.js hydrogen-atom/hydrogen-3d.css bonner-gpu.rice.edu:/var/www/html/bonner-gpu/bm/hydrogen-atom/ && rsync -az hydrogen-atom/hydrogen-3d.html bonner-gpu.rice.edu:/var/www/html/bonner-gpu/bm/hydrogen-atom/index.html && echo '✓ hydrogen-atom deployed'",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true }
+    },
+    {
+      "label": "Deploy: landing page → bonner-gpu",
+      "type": "shell",
+      "command": "rsync -az --info=progress2 /tmp/bm_index.html bonner-gpu.rice.edu:/var/www/html/bonner-gpu/bm/index.html && rsync -az /tmp/bm_style.css bonner-gpu.rice.edu:/var/www/html/bonner-gpu/bm/css/main-style.css && echo '✓ landing page deployed'",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true }
+    },
+    {
+      "label": "Git: commit & push",
+      "type": "shell",
+      "command": "git add -A && git diff --cached --quiet && echo 'nothing to commit' || (git commit -m '${input:commitMsg}' && git push && echo '✓ pushed to github')",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true }
+    },
+    {
+      "label": "Deploy all: commit, push & deploy hydrogen-atom",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Git: commit & push",
+        "Deploy: hydrogen-atom → bonner-gpu"
+      ],
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared", "clear": true }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "commitMsg",
+      "type": "promptString",
+      "description": "Commit message",
+      "default": "update"
+    }
+  ]
+}
