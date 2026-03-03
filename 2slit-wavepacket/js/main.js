@@ -685,6 +685,97 @@ function resetSim() {
 }
 
 // ─────────────────────────────────────────────────────────────
+//  Visual palette & particle-colour pickers
+// ─────────────────────────────────────────────────────────────
+const PALETTE_META = {
+  plasma:   'Plasma',
+  viridis:  'Viridis',
+  inferno:  'Inferno',
+  magma:    'Magma',
+  ocean:    'Ocean',
+  fire:     'Fire',
+  neon:     'Neon',
+  coolwarm: 'Cool–Warm',
+};
+
+function paletteCssGrad(key) {
+  const stops = WAVE_PALETTES[key];
+  const parts = stops.map((c, i) => {
+    const p = Math.round(i / (stops.length - 1) * 100);
+    return `rgb(${Math.round(c[0]*255)},${Math.round(c[1]*255)},${Math.round(c[2]*255)}) ${p}%`;
+  });
+  return `linear-gradient(to right, ${parts.join(', ')})`;
+}
+
+function buildPaletteUI() {
+  const btn   = document.getElementById('palette-btn');
+  const strip = document.getElementById('palette-strip-cur');
+  const lbl   = document.getElementById('palette-label-cur');
+  const popup = document.getElementById('palette-popup');
+  let open = false;
+
+  // Populate popup with one row per palette
+  Object.keys(PALETTE_META).forEach(key => {
+    const opt = document.createElement('div');
+    opt.className = 'palette-option' + (key === currentPaletteKey ? ' active' : '');
+    opt.dataset.key = key;
+    const s = document.createElement('div');
+    s.className = 'p-strip';
+    s.style.background = paletteCssGrad(key);
+    const n = document.createElement('span');
+    n.className = 'p-name';
+    n.textContent = PALETTE_META[key];
+    opt.appendChild(s);
+    opt.appendChild(n);
+    popup.appendChild(opt);
+    opt.addEventListener('click', e => {
+      e.stopPropagation();
+      setWavePalette(key);
+      strip.style.background = paletteCssGrad(key);
+      lbl.textContent = PALETTE_META[key];
+      popup.querySelectorAll('.palette-option').forEach(o =>
+        o.classList.toggle('active', o.dataset.key === key));
+      closePopup();
+    });
+  });
+
+  strip.style.background = paletteCssGrad(currentPaletteKey);
+
+  function openPopup() {
+    const r = btn.getBoundingClientRect();
+    // Try to open below; if it would clip the viewport, open above
+    const popH = 8 * 30; // approx height
+    const below = r.bottom + 6;
+    popup.style.left = r.left + 'px';
+    popup.style.top  = (below + popH > window.innerHeight ? r.top - popH - 6 : below) + 'px';
+    popup.style.display = 'block';
+    open = true;
+  }
+  function closePopup() { popup.style.display = 'none'; open = false; }
+
+  btn.addEventListener('click', e => { e.stopPropagation(); open ? closePopup() : openPopup(); });
+  document.addEventListener('click', () => { if (open) closePopup(); });
+}
+
+function buildParticleUI() {
+  const container = document.getElementById('particle-picker');
+  PARTICLE_PRESETS.forEach((p, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'particle-dot' + (i === trailColorIdx ? ' active' : '');
+    const [r, g, b] = p.rgb;
+    dot.style.background = `rgb(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)})`;
+    // Tooltip: strip leading emoji
+    dot.title = p.label.replace(/^\S+\s*/, '');
+    dot.addEventListener('click', () => {
+      trailColorIdx = i;
+      container.querySelectorAll('.particle-dot').forEach((d, j) =>
+        d.classList.toggle('active', j === i));
+    });
+    container.appendChild(dot);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
 //  UI wiring
 // ─────────────────────────────────────────────────────────────
 function initUI() {
@@ -723,13 +814,8 @@ function initUI() {
       showBohmian ? 'Hide Particles' : 'Show Particles';
   });
 
-  document.getElementById('palette-select').addEventListener('change', e => {
-    setWavePalette(e.target.value);
-  });
-
-  document.getElementById('particle-select').addEventListener('change', e => {
-    trailColorIdx = parseInt(e.target.value, 10);
-  });
+  buildPaletteUI();
+  buildParticleUI();
 
   document.getElementById('btn-view').addEventListener('click', () => {
     // Cycle: density → phase → 3D surface → spacetime → density

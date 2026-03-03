@@ -130,36 +130,18 @@
           <div class="slider-header">
             <span class="slider-name">Wave palette</span>
           </div>
-          <select id="palette-select">
-            <option value="plasma"   selected>Plasma  — purple → yellow</option>
-            <option value="viridis"         >Viridis — purple → green → yellow</option>
-            <option value="inferno"         >Inferno — black → red → white</option>
-            <option value="magma"           >Magma   — black → purple → peach</option>
-            <option value="ocean"           >Ocean   — navy → cyan → white</option>
-            <option value="fire"            >Fire    — black → red → white</option>
-            <option value="neon"            >Neon    — black → green → white</option>
-            <option value="coolwarm"        >Cool–Warm — teal → white → red</option>
-          </select>
+          <div id="palette-btn" class="palette-btn">
+            <div id="palette-strip-cur" class="palette-strip-cur"></div>
+            <span id="palette-label-cur" class="palette-label-cur">Plasma</span>
+            <span class="palette-arrow">▾</span>
+          </div>
         </div>
 
         <div class="slider-row">
           <div class="slider-header">
             <span class="slider-name">Particle color</span>
           </div>
-          <select id="particle-select">
-            <option value="0"  selected>🟡 Yellow</option>
-            <option value="1"          >🩵 Cyan</option>
-            <option value="2"          >⚪ White</option>
-            <option value="3"          >🟢 Green</option>
-            <option value="4"          >🟣 Magenta</option>
-            <option value="5"          >🟠 Orange</option>
-            <option value="6"          >🔴 Red</option>
-            <option value="7"          >🔵 Blue</option>
-            <option value="8"          >🌸 Pink</option>
-            <option value="9"          >💜 Lavender</option>
-            <option value="10"         >✨ Gold</option>
-            <option value="11"         >🍀 Lime</option>
-          </select>
+          <div id="particle-picker" class="particle-picker"></div>
         </div>
       </div>
 
@@ -240,6 +222,9 @@
       view as shown here.  The plasma colormap and gamma=0.35 are identical to the Python figures.
     </p>
   </div>
+
+  <!-- Palette popup (fixed-positioned, populated by JS) -->
+  <div id="palette-popup" class="palette-popup"></div>
 
   <script type="module" src="js/main.js"></script>
 </body>

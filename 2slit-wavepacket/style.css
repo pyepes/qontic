@@ -215,7 +215,94 @@ select option {
   background: #0d1228;
   color: var(--text);
 }
+/* ── Palette picker ─────────────────────────── */
+.palette-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 9px;
+  background: rgba(0,204,255,0.05);
+  transition: border-color .2s, box-shadow .2s;
+  user-select: none;
+}
+.palette-btn:hover {
+  border-color: var(--accent);
+  box-shadow: var(--glow);
+}
+.palette-strip-cur {
+  flex: 1;
+  height: 16px;
+  border-radius: 4px;
+}
+.palette-label-cur {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  min-width: 52px;
+  text-align: right;
+}
+.palette-arrow {
+  font-size: 11px;
+  color: var(--accent);
+  line-height: 1;
+}
+.palette-popup {
+  position: fixed;
+  z-index: 9999;
+  background: rgba(8, 10, 28, 0.97);
+  border: 1px solid rgba(0,204,255,0.30);
+  border-radius: 10px;
+  padding: 7px;
+  box-shadow: 0 12px 44px rgba(0,0,0,0.80);
+  width: 240px;
+  display: none;
+  backdrop-filter: blur(16px);
+}
+.palette-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 5px 7px;
+  border: 2px solid transparent;
+  transition: background .15s;
+}
+.palette-option:hover  { background: rgba(0,204,255,0.10); }
+.palette-option.active { border-color: var(--accent); }
+.palette-option .p-strip {
+  flex: 1;
+  height: 14px;
+  border-radius: 3px;
+}
+.palette-option .p-name {
+  width: 66px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+}
 
+/* ── Particle colour dots ──────────────────── */
+.particle-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 4px 0;
+}
+.particle-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid rgba(255,255,255,0.12);
+  transition: border-color .15s, transform .15s, box-shadow .15s;
+}
+.particle-dot:hover   { transform: scale(1.2); border-color: rgba(255,255,255,0.4); }
+.particle-dot.active  { border-color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.55); }
 /* ── HUD overlay ─────────────────────────────── */
 #hud {
   position: absolute;
