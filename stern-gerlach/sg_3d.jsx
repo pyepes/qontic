@@ -1500,7 +1500,28 @@ MathJax = {
 
 <h2>1. The Quantum State</h2>
 <p>A spin-&frac12; particle entering the magnet is prepared in a superposition of spin
-eigenstates along the measurement axis $\\hat{n}(\\varphi) = (\\sin\\varphi, \\cos\\varphi, 0)$:</p>
+eigenstates along the measurement axis $\\hat{n}(\\varphi) = (\\sin\\varphi, \\cos\\varphi, 0)$.</p>
+<div style="background:rgba(20,50,90,0.5);border:1px solid rgba(80,140,255,0.3);border-radius:7px;padding:10px 14px;margin:10px 0 14px;font-size:13px;line-height:1.7">
+  <b style="color:#7ab8ff">What particle is this?</b><br/>
+  The simulation is <em>species-agnostic</em>: it models any spin-&frac12; particle in dimensionless units.
+  <ul style="margin:6px 0 0 16px;padding:0">
+    <li><b style="color:#f0c060">Silver atoms</b> — the original 1922 Stern&ndash;Gerlach experiment. The unpaired
+      4<em>d</em> electron gives the atom spin-&frac12;. The heavy nuclear mass makes
+      deflections small and the trajectory nearly classical, which is why the experiment
+      was interpretable without quantum mechanics being fully developed.</li>
+    <li style="margin-top:6px"><b style="color:#88ddff">Neutrons</b> — the cleanest modern realisation.
+      Being electrically neutral, neutrons feel <em>only</em> the magnetic dipole force
+      ($\\boldsymbol{\\mu}_n\\cdot\\nabla\\mathbf{B}$) with no Lorentz deflection or
+      stray-electric-field contamination. Slow (cold) neutrons have a de&nbsp;Broglie
+      wavelength of nanometres, making wave-packet effects and Bohmian trajectory
+      experiments directly observable. They are the standard probe in
+      fundamental spin-measurement tests today.</li>
+    <li style="margin-top:6px"><b style="color:#aaffaa">Electrons</b> — spin-&frac12; but charged, so a
+      longitudinal magnetic field also bends the beam via the Lorentz force, masking
+      the pure spin deflection. Impractical for a clean Stern&ndash;Gerlach measurement
+      in free space.</li>
+  </ul>
+</div>
 <div class="eq">$$|\\Psi\\rangle = \\cos\\tfrac{\\theta}{2}\\,|{+}\\hat{n}\\rangle + \\sin\\tfrac{\\theta}{2}\\,|{-}\\hat{n}\\rangle$$</div>
 
 <h3>Initial wave packet</h3>
