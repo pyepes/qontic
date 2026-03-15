@@ -136,10 +136,10 @@ function bohmVPauli(sc,x,y,z,t){
   // Spin-density vector S = [Sx,Sy,Sz] at each of the 6 stencil points
   const sv=(ps)=>[2*(ps[0]*ps[2]+ps[1]*ps[3]), 2*(ps[0]*ps[3]-ps[1]*ps[2]), ps[0]*ps[0]+ps[1]*ps[1]-ps[2]*ps[2]-ps[3]*ps[3]];
   const Sxp=sv(pp),Sxn=sv(pn),Syp=sv(qp),Syn=sv(qn),Szp=sv(rp),Szn=sv(rn);
-  // (∇×S)/(2ρ)
-  const curlx=(Szp[1]-Szn[1]-Syp[2]+Syn[2])/(2*h*2*rho);
-  const curly=(Sxp[2]-Sxn[2]-Szp[0]+Szn[0])/(2*h*2*rho);
-  const curlz=(Syp[0]-Syn[0]-Sxp[1]+Sxn[1])/(2*h*2*rho);
+  // (∇×S)/(2ρ)  where (∇×S)_x = ∂_y S_z − ∂_z S_y, etc.
+  const curlx=(Syp[2]-Syn[2]-Szp[1]+Szn[1])/(2*h*2*rho);
+  const curly=(Szp[0]-Szn[0]-Sxp[2]+Sxn[2])/(2*h*2*rho);
+  const curlz=(Sxp[1]-Sxn[1]-Syp[0]+Syn[0])/(2*h*2*rho);
   let vx=vcx+curlx,vy=vcy+curly,vz=vcz+curlz;
   const spd=Math.sqrt(vx*vx+vy*vy+vz*vz);
   if(spd>25){const s=25/spd;return[vx*s,vy*s,vz*s];}
@@ -181,6 +181,51 @@ function _jState(n,l,j,mj){
 // Scalar sampling comps equivalent for j-state (uses same orbital but ignores spin)
 function _jScalar(sc){
   return sc.map(c=>({n:c.n,l:c.l,m:c.m,cRe:Math.sqrt(c.upRe*c.upRe+c.upIm*c.upIm+c.dnRe*c.dnRe+c.dnIm*c.dnIm),cIm:0}));
+}
+
+// ── Dynamic j-state entries for any (n,l) ───────────────────────
+function _buildJStatesForOrbit(n,l){
+  const lName=['s','p','d','f','g'][l]??String(l);
+  const fmtJ =j=>({0.5:'½',1.5:'³/₂',2.5:'⁵/₂',3.5:'⁷/₂'}[j]??j.toFixed(1));
+  const fmtMj=mj=>{const a=Math.abs(mj);return (mj>=0?'+':'−')+({0.5:'½',1.5:'³/₂',2.5:'⁵/₂',3.5:'⁷/₂'}[a]??a.toFixed(1));};
+  const out=[];
+  for(const dj of [0.5,-0.5]){
+    const j=l+dj; if(j<0.45) continue;
+    for(let mj=j;mj>=-j+0.001;mj-=1){
+      const sc=_jState(n,l,j,mj); if(!sc.length) continue;
+      const note=l===0?' (= product)':sc.length===1?' (pure)':' (mixed)';
+      out.push({label:`${n}${lName}  j=${fmtJ(j)}, mⱼ=${fmtMj(mj)}${note}`, sc, n, l, j, mj});
+    }
+  }
+  return out;
+}
+
+let _currentJEntries=[]; // cache of j-state entries for current orbital
+
+function _applyJState(entry){
+  if(!entry) return;
+  spinComps=entry.sc.map(c=>({...c}));
+  // Update scalar comps to match the orbital parts of the spinor
+  comps=entry.sc.map(c=>{
+    const w=Math.sqrt(c.upRe*c.upRe+c.upIm*c.upIm+c.dnRe*c.dnRe+c.dnIm*c.dnIm);
+    return {n:c.n,l:c.l,m:c.m,cRe:w,cIm:0};
+  });
+  if(comps.length===1) comps[0].cRe=1;
+  else{
+    const nm=Math.sqrt(comps.reduce((s,c)=>s+c.cRe*c.cRe,0));
+    if(nm>1e-10) comps.forEach(c=>c.cRe/=nm);
+  }
+}
+
+function _refreshJStateDropdown(){
+  const o=ORBITALS[orbIdx];
+  _currentJEntries=_buildJStatesForOrbit(o.n,o.l);
+  const sel=document.getElementById('jStateSel');
+  if(sel) sel.innerHTML=_currentJEntries.map((e,i)=>`<option value="${i}">${e.label}</option>`).join('');
+  if(_currentJEntries.length){
+    if(sel) sel.value='0';
+    _applyJState(_currentJEntries[0]);
+  }
 }
 
 const SPIN_ORBITALS=[
@@ -435,7 +480,10 @@ function buildComps(){
   } else {
     const o=ORBITALS[orbIdx];comps=[{n:o.n,l:o.l,m:o.m,cRe:1,cIm:0}];
     cloudVelGrid=null; cloudFieldAge=Infinity; cloudMaxRho=-1;
-    if(spinEnabled) buildSpinComps();
+    if(spinEnabled){
+      if(spinMode==='jstate') _refreshJStateDropdown();
+      else buildSpinComps();
+    }
   }
   projDirty=true; projVolCache=null;
   if(showCloud) initCloudParts();
@@ -525,12 +573,10 @@ function buildCloudFieldSpin(){
     const Sxp=si(i1,j,k),Sxn=si(i0,j,k);
     const Syp=si(i,j1,k),Syn=si(i,j0,k);
     const Szp=si(i,j,k1),Szn=si(i,j,k0);
-    // Spin-curl term (∇×S)/(2ρ)
-    vx+=(Szp[1]-Szn[1]-Syp[2]+Syn[2])/(2*dy*2*rho); // use dy as dz share... corrected:
-    // Actually reconstruct correctly using consistent spacings:
-    vx=((ur*dxUI-ui*dxUR+dr*dxDI-di*dxDR)/rho) + (Szp[1]-Szn[1])/(dz*2*rho) - (Syp[2]-Syn[2])/(dy*2*rho);
-    vy=((ur*dyUI-ui*dyUR+dr*dyDI-di*dyDR)/rho) + (Sxp[2]-Sxn[2])/(dx*2*rho) - (Szp[0]-Szn[0])/(dz*2*rho);
-    vz=((ur*dzUI-ui*dzUR+dr*dzDI-di*dzDR)/rho) + (Syp[0]-Syn[0])/(dy*2*rho) - (Sxp[1]-Sxn[1])/(dx*2*rho);
+    // Spin-curl term (∇×S)/(2ρ)  where (∇×S)_x = ∂_y S_z − ∂_z S_y, etc.
+    vx=((ur*dxUI-ui*dxUR+dr*dxDI-di*dxDR)/rho) + (Syp[2]-Syn[2])/(dy*2*rho) - (Szp[1]-Szn[1])/(dz*2*rho);
+    vy=((ur*dyUI-ui*dyUR+dr*dyDI-di*dyDR)/rho) + (Szp[0]-Szn[0])/(dz*2*rho) - (Sxp[2]-Sxn[2])/(dx*2*rho);
+    vz=((ur*dzUI-ui*dzUR+dr*dzDI-di*dzDR)/rho) + (Sxp[1]-Sxn[1])/(dx*2*rho) - (Syp[0]-Syn[0])/(dy*2*rho);
     const spd=Math.sqrt(vx*vx+vy*vy+vz*vz);
     if(spd>25){const s=25/spd;vx*=s;vy*=s;vz*=s;}
     cloudVelGrid[idx*3]=vx;cloudVelGrid[idx*3+1]=vy;cloudVelGrid[idx*3+2]=vz;
@@ -623,24 +669,72 @@ function stepCloudParticles(){
   if(!showCloud)return;
   const dt=dtStep*simSpeed*BASE_SPEED;
   const rmSq=(rMax()*1.5)**2;
-  // ── Spin mode: always use grid field (analyticalVel is scalar and inapplicable) ──
+  // ── Spin mode ────────────────────────────────────────────────────────────
   if(spinEnabled&&spinComps.length){
-    cloudFieldAge++;
-    if(!cloudVelGrid||(cloudFieldAge>CLOUD_FIELD_TTL&&!dragging))buildCloudField();
-    for(const p of particles){
-      if(isNaN(p.x)||p.x*p.x+p.y*p.y+p.z*p.z>rmSq){
-        const s=resampleOne(t);if(s){p.x=s.x;p.y=s.y;p.z=s.z;}continue;
-      }
-      const[vx,vy,vz]=cloudVelAt(p.x,p.y,p.z);
-      const nx=p.x+dt*vx,ny=p.y+dt*vy,nz=p.z+dt*vz;
-      if(isNaN(nx)||nx*nx+ny*ny+nz*nz>rmSq){
-        const s=resampleOne(t);if(s){p.x=s.x;p.y=s.y;p.z=s.z;}continue;
-      }
-      p.x=nx;p.y=ny;p.z=nz;
-      // Compute spin-↑ fraction for colour lerp (cheap once per particle per frame)
+    // Helper: write p.spinW from current spinor
+    const syncW=(p)=>{
       const[ur,ui,dr,di]=psiSpinor(spinComps,p.x,p.y,p.z,t);
       const rhoT=ur*ur+ui*ui+dr*dr+di*di;
       p.spinW=rhoT>1e-30?(ur*ur+ui*ui)/rhoT:0.5;
+    };
+
+    // Fast path: 1s orbital (single component, n=1, l=0).
+    // Analytically v = −(r̂ × n̂), which is exact Rodrigues rotation around n̂
+    // at angular speed 1/r — r and the polar angle to n̂ are both conserved.
+    // This avoids Euler drift regardless of dt size.
+    const is1s=comps.length===1&&comps[0].n===1&&comps[0].l===0;
+    if(is1s){
+      let nax,nay,naz; // spin quantisation axis
+      if(spinMode==='product'){
+        nax=Math.sin(spinTheta)*Math.cos(spinPhi);
+        nay=Math.sin(spinTheta)*Math.sin(spinPhi);
+        naz=Math.cos(spinTheta);
+      } else {
+        // j-state on l=0: pure |↑⟩ (upRe≈1) or |↓⟩ (dnRe≈1)
+        const sg=spinComps[0].upRe>0.5?1:-1;
+        nax=0;nay=0;naz=sg;
+      }
+      for(const p of particles){
+        if(isNaN(p.x)||p.x*p.x+p.y*p.y+p.z*p.z>rmSq){
+          const sr=resampleOne(t);if(sr){p.x=sr.x;p.y=sr.y;p.z=sr.z;}syncW(p);continue;
+        }
+        const pr=Math.sqrt(p.x*p.x+p.y*p.y+p.z*p.z);
+        if(pr<0.15){syncW(p);continue;}
+        // Rodrigues rotation: r_new = r cosθ + (n̂×r) sinθ + n̂(n̂·r)(1−cosθ)
+        const ang=dt/pr,cosA=Math.cos(ang),sinA=Math.sin(ang),ocA=1-cosA;
+        const dotN=nax*p.x+nay*p.y+naz*p.z;
+        const cpx=nay*p.z-naz*p.y,cpy=naz*p.x-nax*p.z,cpz=nax*p.y-nay*p.x;
+        p.x=p.x*cosA+cpx*sinA+nax*dotN*ocA;
+        p.y=p.y*cosA+cpy*sinA+nay*dotN*ocA;
+        p.z=p.z*cosA+cpz*sinA+naz*dotN*ocA;
+        syncW(p);
+      }
+      return;
+    }
+
+    // General spin (higher orbitals, superpositions): sub-stepped RK2 midpoint.
+    // RK2 preserves orbital radius to O(dtSub⁴) per step — stable for ω·dtSub < √2.
+    // dtSub=0.1 a.u. ensures stability for ω ≤ 1/r with r ≥ 0.15 a.u.
+    const DT_SUB=0.1;
+    const nSub=Math.min(50,Math.max(1,Math.ceil(Math.abs(dt)/DT_SUB)));
+    const dtSub=dt/nSub;
+    for(const p of particles){
+      if(isNaN(p.x)||p.x*p.x+p.y*p.y+p.z*p.z>rmSq){
+        const sr=resampleOne(t);if(sr){p.x=sr.x;p.y=sr.y;p.z=sr.z;}syncW(p);continue;
+      }
+      let px=p.x,py=p.y,pz=p.z,escaped=false;
+      for(let sub=0;sub<nSub;sub++){
+        const[k1x,k1y,k1z]=bohmVPauli(spinComps,px,py,pz,t);
+        const mx=px+0.5*dtSub*k1x,my=py+0.5*dtSub*k1y,mz=pz+0.5*dtSub*k1z;
+        const[k2x,k2y,k2z]=bohmVPauli(spinComps,mx,my,mz,t);
+        px+=dtSub*k2x;py+=dtSub*k2y;pz+=dtSub*k2z;
+        if(px*px+py*py+pz*pz>rmSq){escaped=true;break;}
+      }
+      if(escaped||isNaN(px)){
+        const sr=resampleOne(t);if(sr){p.x=sr.x;p.y=sr.y;p.z=sr.z;}syncW(p);continue;
+      }
+      p.x=px;p.y=py;p.z=pz;
+      syncW(p);
     }
     return;
   }
@@ -2234,6 +2328,117 @@ function toggleExpert(){
   document.getElementById('expertBtn').classList.toggle('active',expertMode);
 }
 
+// ════════════════════════════════════════════════════════════════
+//  THEORY PANEL
+// ════════════════════════════════════════════════════════════════
+function toggleTheory(){
+  const p=document.getElementById('theoryPanel');
+  const b=document.getElementById('theoryBtn');
+  const open=p.style.display==='none'||p.style.display==='';
+  p.style.display=open?'flex':'none';
+  if(b)b.classList.toggle('active',open);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ANALYTICAL VERIFICATION CHECKS
+// ════════════════════════════════════════════════════════════════
+function runAnalyticalChecks(){
+  // Open expert panel so results are visible
+  if(!expertMode) toggleExpert();
+
+  const lines=[];
+  const PASS='\u2713'; const FAIL='\u2717'; const WARN='\u26a0';
+
+  // ── Test 1: m≠0 eigenstate without spin ──────────────────────
+  // Analytical: v = (-m·y/ρ², m·x/ρ², 0), |v| = |m|/ρ_cyl
+  if(!spinEnabled && comps.length===1 && comps[0].m!==0){
+    const m=comps[0].m;
+    let maxErr=0;
+    const testPts=[[3,0,0],[0,3,0],[2,2,0],[1.5,2.5,0],[4,1,0]];
+    for(const[x,y,z] of testPts){
+      const rho2=x*x+y*y;
+      const [vx,vy,vz]=bohmV(comps,x,y,z,t);
+      const vAnalytic=[-m*y/rho2, m*x/rho2, 0];
+      const err=Math.sqrt(
+        (vx-vAnalytic[0])**2+(vy-vAnalytic[1])**2+(vz-vAnalytic[2])**2
+      )/Math.max(Math.abs(m)/Math.sqrt(rho2),1e-6);
+      maxErr=Math.max(maxErr,err);
+    }
+    const ok=maxErr<0.02;
+    lines.push(`${ok?PASS:FAIL} m≠0 azimuthal v: max err ${(maxErr*100).toFixed(2)}% (expect <2%) ${ok?'':'— FD grid too coarse near axis?'}`);
+  } else if(!spinEnabled && comps.length===1 && comps[0].m===0){
+    lines.push(`${WARN} m=0 eigenstate — v should be 0 everywhere (no circulation). Enable spin to see spin-curl.`);
+  }
+
+  // ── Test 2: 1s product spin — |v| = sin∠(r̂, n̂) ─────────────
+  if(spinEnabled && spinMode==='product' && comps.length===1 && comps[0].n===1 && comps[0].l===0){
+    const nx=Math.sin(spinTheta)*Math.cos(spinPhi);
+    const ny=Math.sin(spinTheta)*Math.sin(spinPhi);
+    const nz=Math.cos(spinTheta);
+    // Test at several radii to confirm r-independence
+    const testPts=[[1,0,0],[2,0,0],[0.5,0.5,0],[3,1,0],[0,2,1]];
+    let maxErr=0;
+    for(const[x,y,z] of testPts){
+      const r=Math.sqrt(x*x+y*y+z*z); if(r<0.1) continue;
+      const rx=x/r, ry=y/r, rz=z/r;
+      // v_analytical = -(r̂ × n̂)
+      const axn=[ry*nz-rz*ny, rz*nx-rx*nz, rx*ny-ry*nx];
+      const vAnalytic=[-axn[0],-axn[1],-axn[2]];
+      const[vx,vy,vz]=bohmVPauli(spinComps,x,y,z,t);
+      const mag=Math.sqrt(vAnalytic[0]**2+vAnalytic[1]**2+vAnalytic[2]**2);
+      if(mag<1e-6) continue;
+      const err=Math.sqrt((vx-vAnalytic[0])**2+(vy-vAnalytic[1])**2+(vz-vAnalytic[2])**2)/mag;
+      maxErr=Math.max(maxErr,err);
+    }
+    const ok=maxErr<0.05;
+    lines.push(`${ok?PASS:FAIL} 1s+spin v=−(r̂×n̂): max err ${(maxErr*100).toFixed(2)}% (expect <5% — FD accuracy)`);
+    // Also check r-independence: |v| should be same at r=1 and r=3
+    const[v1x,v1y,v1z]=bohmVPauli(spinComps,1,0,0,t);
+    const[v3x,v3y,v3z]=bohmVPauli(spinComps,3,0,0,t);
+    const mag1=Math.sqrt(v1x**2+v1y**2+v1z**2);
+    const mag3=Math.sqrt(v3x**2+v3y**2+v3z**2);
+    const rErr=Math.abs(mag1-mag3)/Math.max(mag1,1e-6);
+    const rok=rErr<0.05;
+    lines.push(`${rok?PASS:FAIL} 1s+spin r-independence: |v|(r=1)=${mag1.toFixed(3)}, |v|(r=3)=${mag3.toFixed(3)}, diff ${(rErr*100).toFixed(1)}% (expect <5%)`);
+  }
+
+  // ── Test 3: spinor norm ──────────────────────────────────────
+  if(spinEnabled && spinComps.length){
+    const norm=spinComps.reduce((s,c)=>s+c.upRe**2+c.upIm**2+c.dnRe**2+c.dnIm**2,0);
+    const ok=Math.abs(norm-1)<0.0001;
+    lines.push(`${ok?PASS:FAIL} Spinor norm = ${norm.toFixed(6)} (expect 1.000000)`);
+  }
+
+  // ── Test 4: ρ↑ fraction vs cos²(θ/2) ─────────────────────────
+  if(spinEnabled && spinMode==='product' && voxelRhoUp && voxelRhoDn){
+    let sumUp=0,sumTot=0;
+    for(let i=0;i<voxelRhoUp.length;i++){sumUp+=voxelRhoUp[i];sumTot+=voxelRhoUp[i]+voxelRhoDn[i];}
+    const frac=sumTot>0?sumUp/sumTot:0.5;
+    const expected=Math.cos(spinTheta/2)**2;
+    const err=Math.abs(frac-expected);
+    const ok=err<0.015;
+    lines.push(`${ok?PASS:FAIL} ρ↑ fraction: measured ${frac.toFixed(4)}, analytical cos²(θ/2)=${expected.toFixed(4)}, err=${(err*100).toFixed(2)}% (expect <1.5%)`);
+  }
+
+  if(!lines.length) lines.push(`${WARN} No applicable tests for current state. Try: m≠0 eigenstate without spin, or 1s+product spin.`);
+
+  // Display in a browser alert (simple, always visible) + console
+  console.table(lines);
+  const msg='Analytical Verification Results\n─────────────────────────────────\n'+lines.join('\n');
+  // Show in a temporary overlay on the canvas
+  let box=document.getElementById('verifyResultBox');
+  if(!box){
+    box=document.createElement('div');box.id='verifyResultBox';
+    box.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(6,11,22,.97);border:1px solid #16213a;padding:18px 22px;z-index:500;max-width:520px;width:90%;border-radius:4px;font-size:11px;line-height:1.8;white-space:pre-wrap;cursor:pointer;';
+    box.title='Click to close';
+    box.onclick=()=>box.remove();
+    document.querySelector('.canvas-wrap').appendChild(box);
+  }
+  box.textContent=msg+'\n\n(Click to close)';
+  // Auto-close after 12 seconds
+  clearTimeout(box._t);box._t=setTimeout(()=>box.remove(),12000);
+}
+
 function toggleAxes(){
   showAxes=!showAxes;
   document.getElementById('axesBtn').classList.toggle('active',showAxes);
@@ -2333,7 +2538,8 @@ function toggleSpin(){
   spinEnabled=!spinEnabled;
   if(spinEnabled){
     // Turning on: build spinComps from current state
-    if(spinMode==='product') buildSpinComps();
+    if(spinMode==='jstate') _refreshJStateDropdown();
+    else buildSpinComps();
     // Phase mode is incompatible with spin
     if(showPhase){showPhase=false;}
   }else{
@@ -2380,7 +2586,10 @@ function _syncSpinUI(){
 
 function setSpinMode(mode){
   spinMode=mode;
-  if(spinEnabled&&mode==='product'){buildSpinComps();}
+  if(spinEnabled){
+    if(mode==='jstate') _refreshJStateDropdown();
+    else buildSpinComps();
+  }
   cloudVelGrid=null;cloudFieldAge=Infinity;
   volumeDirty=true;lobeTexDirty=true;t=0;
   if(showCloud){initCloudParts();}else{particles=sampleParticles(nPart);}
@@ -2388,16 +2597,10 @@ function setSpinMode(mode){
 }
 
 function setJState(idx){
-  const entry=SPIN_ORBITALS[idx];if(!entry)return;
-  spinComps=entry.sc.map(c=>({...c}));
-  // Set scalar comps using the equivalent orbital combination for sampling
-  comps=entry.sc.map(c=>({n:c.n,l:c.l,m:c.m,cRe:Math.sqrt(c.upRe*c.upRe+c.upIm*c.upIm+c.dnRe*c.dnRe+c.dnIm*c.dnIm),cIm:0}));
-  // For single elements ensure cRe is 1 (normalized single orbital)
-  if(comps.length===1) comps[0].cRe=1;
-  else{
-    const norm=Math.sqrt(comps.reduce((s,c)=>s+c.cRe*c.cRe,0));
-    if(norm>1e-10) comps.forEach(c=>c.cRe/=norm);
-  }
+  // Use dynamic entries built for the current orbital (never stale 2p data for a 1s atom)
+  if(!_currentJEntries.length) _refreshJStateDropdown();
+  const entry=_currentJEntries[idx]; if(!entry) return;
+  _applyJState(entry);
   cloudVelGrid=null;cloudFieldAge=Infinity;
   volumeDirty=true;lobeTexDirty=true;t=0;
   if(showCloud){initCloudParts();}else{particles=sampleParticles(nPart);}

@@ -509,6 +509,152 @@ body.light input[type=range] { accent-color: #0066cc; }
 /* Light-mode override for spin label */
 body.light .spin-slabel span { color: #0066cc; }
 
+/* ════════════════════════════════════════════════════════════════
+   Theory Panel — full canvas overlay
+   ════════════════════════════════════════════════════════════════ */
+#theoryBtn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(8,14,28,.88);
+  color: var(--accent);
+  font-family: 'Crimson Pro', serif;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 120;
+  transition: background .14s, border-color .14s;
+}
+#theoryBtn:hover,
+#theoryBtn.active { background: rgba(0,229,255,.15); border-color: var(--accent); }
+
+#theoryPanel {
+  position: absolute;
+  inset: 0;
+  background: rgba(4,7,15,.96);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: blur(6px);
+}
+
+.tp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.tp-title {
+  font-family: 'Crimson Pro', serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: .04em;
+}
+.tp-close {
+  all: unset;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--muted);
+  line-height: 1;
+  padding: 0 4px;
+  transition: color .12s;
+}
+.tp-close:hover { color: var(--text); }
+
+.tp-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 30px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.tp-sec h2 {
+  font-family: 'Crimson Pro', serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+.tp-sec h3 {
+  font-size: 12px;
+  color: var(--accent2);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin: 12px 0 6px;
+}
+.tp-sec p {
+  font-size: 12px;
+  line-height: 1.85;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.tp-eq {
+  font-family: 'Crimson Pro', serif;
+  font-size: 15px;
+  color: var(--accent3);
+  background: rgba(105,240,174,.06);
+  border-left: 3px solid var(--accent3);
+  padding: 8px 14px;
+  margin: 10px 0;
+  border-radius: 0 3px 3px 0;
+  letter-spacing: .02em;
+}
+.tp-highlight {
+  background: rgba(0,229,255,.06);
+  border-left: 3px solid var(--accent);
+  padding: 8px 14px;
+  border-radius: 0 3px 3px 0;
+  font-size: 12px;
+  color: #b8d4f8;
+  line-height: 1.7;
+  margin: 10px 0;
+}
+.tp-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin: 10px 0;
+}
+.tp-tbl th, .tp-tbl td {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.tp-tbl th { color: var(--accent); background: rgba(0,229,255,.06); }
+.tp-tbl td { color: var(--text); }
+.tp-list {
+  margin: 8px 0 0 18px;
+  font-size: 12px;
+  line-height: 1.85;
+  color: var(--text);
+}
+.tp-list li { margin-bottom: 4px; }
+
+/* light theme */
+body.light #theoryBtn { background: rgba(238,241,249,.9); }
+body.light #theoryPanel { background: rgba(240,244,255,.97); }
+body.light .tp-eq { color: #007744; background: rgba(0,119,68,.06); }
+body.light .tp-highlight { background: rgba(0,102,204,.06); color: #1a2540; }
+body.light .tp-tbl th { color: #0066cc; background: rgba(0,102,204,.06); }
+
 /* Spin diagnostics in expert panel */
 .spin-diag {
   grid-column: 1 / -1;          /* full-width row (like expert-stat) */

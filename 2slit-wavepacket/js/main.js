@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GPUSim } from './gpu-sim.js';
+import { GPUSim } from './gpu-sim.js?v=5';
 
 // ─────────────────────────────────────────────────────────────
 //  Wave colormaps  (dynamic LUT, 512 entries)
@@ -140,10 +140,13 @@ function fitCamera2D() {
   const aspect = W / H;
   camera.aspect = aspect;
   camera.updateProjectionMatrix();
-  // halfH of scene coords the camera must show to cover the canvas:
-  //   if aspect >= 2 (wider than plane) → fit by height (halfH = 1)
-  //   if aspect <  2 (narrower)         → fit by width  (halfH = 2 / aspect)
-  const halfH = Math.max(SURFACE_SCALE / 2, (SS_X / 2) / aspect);
+  // Crop Y to the non-absorbing inner region so the absorber strip is
+  // outside the viewport — the wave simply exits the frame cleanly.
+  const absT     = (useGPU && gpuSim && gpuSim._absThick) ? gpuSim._absThick : 0.15;
+  const innerHalfH = (1 - 2 * absT) * SURFACE_SCALE / 2;
+  const innerHalfW = (1 - 2 * absT) * SS_X / 2;
+  // "Cover" fit: ensure both X and Y fully fill the canvas.
+  const halfH = Math.max(innerHalfH, innerHalfW / aspect);
   const fovRad = camera.fov * Math.PI / 180;
   const d = halfH / Math.tan(fovRad / 2);
   camera.position.set(0, 0, d);
@@ -292,7 +295,7 @@ let showParticles = true;
 let showTrails    = true;
 let trailDisplayLen = 20;    // max visible trail length in nm
 let autoStop = true;         // auto-pause when wave exits domain
-let fdMode   = false;        // false=FFT split-operator, true=FD leapfrog
+let solverMode = 'rk4';  // 'fft' | 'fd' | 'rk4'
 
 // Performance tracking
 let _perfFrameCount = 0;
@@ -317,6 +320,8 @@ const HB = 1.054571817e-34;
 const ME = 9.10938356e-31;
 let bohmPosX = null, bohmPosY = null;
 let bohmNp   = 300;
+let bohmPassedSlit    = null;  // Uint8Array: 1 once particle has crossed the barrier
+let bohmAnyPassedSlit = false; // true once any particle has crossed — stops respawning
 
 // Trajectory trail ring-buffer
 const TRAIL_LEN = 2000;            // steps stored per particle (covers full simulation run)
@@ -383,6 +388,7 @@ function updateSurface(rho, Nx, Ny) {
   const colArr = surfaceGeo.attributes.color.array;
   const N = Nx * Ny;
   const flat = (viewMode === 'density' || viewMode === 'phase');
+  const absT = (useGPU && gpuSim && gpuSim._absThick) ? gpuSim._absThick : 0.15;
 
   let rhoMax = 0;
   for (let i = 0; i < N; i++) if (rho[i] > rhoMax) rhoMax = rho[i];
@@ -395,24 +401,30 @@ function updateSurface(rho, Nx, Ny) {
     for (let iy = 0; iy < Ny; iy++) {
       const vIdx = iy * Nx + ix;   // Three.js vertex index (row-major)
       const rIdx = ix * Ny + iy;   // rho column-major index
-      const t    = rhoMax > 0 ? Math.min(1, rho[rIdx] / rhoMax) : 0;
 
+      // Mask absorber zone: zero color so the wave visually stops at the boundary
+      const fx = ix / (Nx - 1);
+      const fy = iy / (Ny - 1);
+      if (fx < absT || fx > 1 - absT || fy < absT || fy > 1 - absT) {
+        posArr[vIdx * 3 + 2] = 0;
+        colArr[vIdx * 3 + 0] = 0;
+        colArr[vIdx * 3 + 1] = 0;
+        colArr[vIdx * 3 + 2] = 0;
+        continue;
+      }
+
+      const t = rhoMax > 0 ? Math.min(1, rho[rIdx] / rhoMax) : 0;
       posArr[vIdx * 3 + 2] = flat ? 0 : rho[rIdx] * heightScale;
 
       let r, g, b;
       if (psi) {
-        // Phase view: visualise Re(ψ) through the wave-colour LUT.
-        // Re(ψ) varies smoothly (no wrapping discontinuities).
-        // Map [-ampMax, +ampMax] → [0, 1] so the full palette is used.
         const re     = psi[vIdx * 2];
         const ampMax = Math.sqrt(rhoMax) || 1;
-        const reNorm = 0.5 + 0.5 * (re / ampMax); // [0,1]
+        const reNorm = 0.5 + 0.5 * (re / ampMax);
         [r, g, b] = sampleLUT(reNorm);
       } else if (viewMode === 'density') {
-        // Density view: plasma colormap on |ψ|², gamma=0.45 for fringe visibility
         [r, g, b] = sampleLUT(Math.pow(t, 0.45));
       } else {
-        // 3D surface: plasma with sqrt gamma
         [r, g, b] = sampleLUT(Math.sqrt(t));
       }
       colArr[vIdx * 3 + 0] = r;
@@ -508,12 +520,19 @@ function buildBarrier(slitX, slitCenterY1, slitCenterY2, slitHalfWidth) {
   const bGroup = new THREE.Group();
   const mat = new THREE.MeshBasicMaterial({ color: wallHex(), transparent: true, opacity: 0.80 });
 
-  // Wall segments in fractional coords: [lo, hi]
-  const segments = [
-    [0,       slit1Lo],
+  // Clamp wall extent to the visible (non-absorber) band in Y.
+  const absT   = (useGPU && gpuSim && gpuSim._absThick) ? gpuSim._absThick : 0.15;
+  const yMin   = absT;
+  const yMax   = 1.0 - absT;
+
+  // Wall segments in fractional coords: [lo, hi], clamped to visible band
+  const rawSegs = [
+    [yMin,    slit1Lo],
     [slit1Hi, slit2Lo],
-    [slit2Hi, 1.0],
+    [slit2Hi, yMax],
   ];
+  const segments = rawSegs.map(([lo, hi]) => [Math.max(lo, yMin), Math.min(hi, yMax)])
+                          .filter(([lo, hi]) => hi > lo + 1e-6);
 
   // Fractional f → scene coordinates.
   // X: sim x → sceneX = -SS_X/2 + f * SS_X
@@ -683,6 +702,8 @@ function initBohmianPositions(rho, Np, Nx, Ny) {
 
   bohmPosX = new Float32Array(Np);
   bohmPosY = new Float32Array(Np);
+  bohmPassedSlit    = new Uint8Array(Np);
+  bohmAnyPassedSlit = false;
   for (let p = 0; p < Np; p++) {
     const u = Math.random();
     let lo = 0, hi = Nx * Ny - 1;
@@ -697,6 +718,9 @@ function initBohmianPositions(rho, Np, Nx, Ny) {
 // Respawn any dead (NaN) Bohmian particles by sampling from the current density.
 // rho is column-major (ix*Ny+iy), same layout as initBohmianPositions.
 function respawnDeadParticles(rho, Np, Nx, Ny, absThick) {
+  // Once any particle has passed the slit, stop respawning so the
+  // simulation naturally winds down as particles exit the domain.
+  if (bohmAnyPassedSlit) return;
   const dead = absThick || 0.05;
   // Collect indices of dead particles
   const deadList = [];
@@ -754,6 +778,11 @@ function stepBohmian(psi, Np, Nx, Ny, Lx, Ly, Dt, absThick) {
   for (let p = 0; p < Np; p++) {
     const px = bohmPosX[p], py = bohmPosY[p];
     if (isNaN(px)) continue; // already dead
+    // Mark particle as having passed through the barrier (x > 0.52)
+    if (!bohmPassedSlit[p] && px > 0.52) {
+      bohmPassedSlit[p] = 1;
+      bohmAnyPassedSlit = true;
+    }
     // Kill particle if it drifts into absorber zone
     if (px < dead || px > 1 - dead || py < dead || py > 1 - dead) {
       bohmPosX[p] = NaN;
@@ -792,7 +821,25 @@ function initGPU() {
     return true;
   } catch (e) {
     console.warn('GPU physics unavailable, falling back to CPU worker:', e.message);
-    document.getElementById('hud-backend').textContent = '🖥 CPU';
+    const el = document.getElementById('hud-backend');
+    el.textContent = '🖥 CPU';
+    el.title = e.message;  // hover tooltip shows exact reason
+    // Show a dismissible banner so the user knows what failed
+    const banner = document.createElement('div');
+    banner.id = 'gpu-fallback-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#7a2020;color:#fff;font:12px/1.5 monospace;padding:6px 36px 6px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    banner.textContent = '⚠ GPU unavailable — running on CPU (slow). Cause: ' + e.message;
+    const cls = document.createElement('span');
+    cls.textContent = '✕';
+    cls.style.cssText = 'position:absolute;right:10px;top:4px;cursor:pointer;font-size:14px';
+    cls.onclick = () => banner.remove();
+    banner.appendChild(cls);
+    document.body.appendChild(banner);
+    // Auto-reduce resolution and speed to keep CPU manageable
+    const resEl = document.getElementById('resolution');
+    const spEl  = document.getElementById('speed');
+    if (resEl && parseInt(resEl.value) > 64) { resEl.value = 64; resEl.dispatchEvent(new Event('input')); }
+    if (spEl  && parseInt(spEl.value)  > 4)  { spEl.value  = 4;  spEl.dispatchEvent(new Event('input')); }
     return false;
   }
 }
@@ -826,12 +873,18 @@ function dispatchFrame(rho, trajX, trajY, time, norm) {
   updateBohmianMesh(trajX, trajY, Np);
   updateTrailMesh(Np);
 
-  // Auto-stop when sim time reaches the natural end point (like MATLAB Nt limit)
-  if (!paused && useGPU && autoStop && gpuSim.simTime >= gpuSim.stopTime) {
-    paused = true;
-    const btn = document.getElementById('btn-pause');
-    btn.textContent = '\u25b6 Start';
-    btn.classList.remove('btn-running');
+  // Auto-stop: particle-based criterion fires early when all post-slit particles exit;
+  // time-based limit always applies as a hard cap (prevents stranded-particle hangs).
+  if (!paused && useGPU && autoStop) {
+    const particleStop = (showParticles || showTrails) && bohmAnyPassedSlit && bohmPosX &&
+      !bohmPosX.some((x, i) => !isNaN(x) && bohmPassedSlit[i]);
+    const timeStop = gpuSim.simTime >= gpuSim.stopTime;
+    if (particleStop || timeStop) {
+      paused = true;
+      const btn = document.getElementById('btn-pause');
+      btn.textContent = '\u25b6 Start';
+      btn.classList.remove('btn-running');
+    }
   }
 
   document.getElementById('hud-time').textContent = `t = ${(time * 1e15).toFixed(1)} fs`;
@@ -843,7 +896,7 @@ function dispatchFrame(rho, trajX, trajY, time, norm) {
 //  GPU physics tick
 // ─────────────────────────────────────────────────────────────
 function gpuTick(n) {
-  const { Nx, Ny, Lx, Ly, Dt } = gpuSim;
+  const { dispNx: Nx, Ny, Lx, Ly, Dt } = gpuSim;
   if (n > 0) {
     gpuSim.step(n);
     if ((showParticles || showTrails) && bohmPosX && gpuSim.psi) {
@@ -883,7 +936,8 @@ function getConfig() {
     stepsPerFrame : parseInt(document.getElementById('speed').value),
     absThick      : g('absthick'),
     absStrength   : parseFloat(document.getElementById('absstrength').value),
-    fdMode,
+    fdMode        : solverMode === 'fd',
+    rkMode        : solverMode === 'rk4',
   };
 }
 
@@ -930,6 +984,7 @@ buildBarrier(0.5, cfg.slitCenterY1, cfg.slitCenterY2, cfg.slitHalfWidth);
 
   if (useGPU) {
     gpuSim.init(cfg);
+    if (viewMode === 'density' || viewMode === 'phase') fitCamera2D();
     initBohmianPositions(gpuSim.rho, bohmNp, NX, NY);
     gpuTick(0);
   } else {
@@ -1263,11 +1318,11 @@ function initUI() {
   });
 
   document.getElementById('btn-fdmode').addEventListener('click', () => {
-    fdMode = !fdMode;
-    const btn = document.getElementById('btn-fdmode');
-    btn.textContent = fdMode ? 'Solver: FD leapfrog' : 'Solver: FFT split-op';
-    btn.classList.toggle('btn-off', false); // always styled as active, just changes label
-    resetSim();
+    const modes  = ['fft', 'fd', 'rk4'];
+    const labels = { fft: 'Solver: FFT split-op', fd: 'Solver: FD leapfrog', rk4: 'Solver: RK4' };
+    solverMode = modes[(modes.indexOf(solverMode) + 1) % modes.length];
+    document.getElementById('btn-fdmode').textContent = labels[solverMode];
+    resetSim(paused);
   });
 
   buildPaletteUI();

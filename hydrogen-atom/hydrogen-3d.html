@@ -44,16 +44,20 @@
         <div class="slabel spin-slabel">
           <span>Spin (Pauli–Bohm)</span>
           <button class="vtab" id="spinToggleBtn" onclick="toggleSpin()"
-            title="Toggle Pauli–Bohm spin extension. Stationary orbitals become non-stationary via spin-curl term ∇×S / (2ρ).">⬡ Spin</button>
+            title="Toggle Pauli–Bohm spin extension. Stationary orbitals become non-stationary via spin-curl term ∇×S / (2ρ).">⬡
+            Spin</button>
         </div>
         <div id="spinSubSection" style="display:none">
           <div class="crow" id="spinModeRow">
             <label title="Spin state mode">Mode</label>
-            <label title="Product of orbital ψ and a chosen spin direction |n̂⟩"><input type="radio" name="spinMode" id="spinModeProd" checked onchange="setSpinMode('product')"> Product</label>
-            <label title="Spinor-spherical harmonic j-eigenstate via Clebsch–Gordan coupling"><input type="radio" name="spinMode" id="spinModeJst" onchange="setSpinMode('jstate')"> j-state</label>
+            <label title="Product of orbital ψ and a chosen spin direction |n̂⟩"><input type="radio" name="spinMode"
+                id="spinModeProd" checked onchange="setSpinMode('product')"> Product</label>
+            <label title="Spinor-spherical harmonic j-eigenstate via Clebsch–Gordan coupling"><input type="radio"
+                name="spinMode" id="spinModeJst" onchange="setSpinMode('jstate')"> j-state</label>
           </div>
           <div id="spinProductRow" class="crow" style="display:none">
-            <label title="Polar angle θ of the spin direction vector |n̂⟩. θ=π/2 (equatorial) breaks azimuthal symmetry and maximises spin-curl effect.">θ</label>
+            <label
+              title="Polar angle θ of the spin direction vector |n̂⟩. θ=π/2 (equatorial) breaks azimuthal symmetry and maximises spin-curl effect.">θ</label>
             <input type="range" id="sSpinTheta" min="0" max="314" value="157" step="1"
               oninput="spinTheta=this.value/100;document.getElementById('vSpinTheta').textContent=(this.value/100).toFixed(2)+'rad';buildSpinComps&&buildSpinComps();volumeDirty=true;lobeTexDirty=true;">
             <span class="crow-val" id="vSpinTheta">1.57rad</span>
@@ -66,15 +70,7 @@
           </div>
           <div id="spinJRow" class="crow" style="display:none">
             <label title="j-eigenstate: Clebsch–Gordan coupled spinor-spherical harmonic |j, mⱼ⟩">|j, mⱼ⟩</label>
-            <select id="jStateSel" onchange="setJState(parseInt(this.value))">
-              <option value="0">2p₃/₂, mⱼ=+3/2</option>
-              <option value="1">2p₃/₂, mⱼ=+1/2</option>
-              <option value="2">2p₃/₂, mⱼ=−1/2</option>
-              <option value="3">2p₁/₂, mⱼ=+1/2</option>
-              <option value="4">2p₁/₂, mⱼ=−1/2</option>
-              <option value="5">3d₅/₂, mⱼ=+1/2</option>
-              <option value="6">3d₃/₂, mⱼ=+1/2</option>
-            </select>
+            <select id="jStateSel" onchange="setJState(parseInt(this.value))"></select>
           </div>
         </div>
       </div>
@@ -177,8 +173,12 @@
       </div>
       <div>
         <div class="slabel" style="display:flex;justify-content:space-between;align-items:center">State
-          <button class="vtab" id="expertBtn" onclick="toggleExpert()"
-            title="Show/hide numerical verification stats (⟨r⟩, normalization, match %)">Expert</button>
+          <div style="display:flex;gap:4px">
+            <button class="vtab" id="verifyBtn" onclick="runAnalyticalChecks()"
+              title="Run analytical spot-checks of the velocity field against known exact formulas">Verify</button>
+            <button class="vtab" id="expertBtn" onclick="toggleExpert()"
+              title="Show/hide numerical verification stats (⟨r⟩, normalization, match %)">Expert</button>
+          </div>
         </div>
         <div class="stat-grid" id="stGrid">
           <div class="stat"><span class="stat-label">Energy</span><span class="stat-val" id="stE">—</span></div>
@@ -195,9 +195,15 @@
             <div class="stat expert-stat"><span class="stat-label">∫P(r)dr</span><span class="stat-val"
                 id="stNorm">—</span></div>
             <!-- Spin diagnostics — shown only when spin is enabled -->
-            <div class="stat expert-stat spin-diag" id="rowSpinFrac" style="display:none"><span class="stat-label" title="Measured ρ↑/(ρ↑+ρ↓) from voxel grid vs analytical expectation cos²(θ/2). Should match to &lt;1% for product states.">ρ↑ frac / expect</span><span class="stat-val" id="stSpinFrac">—</span></div>
-            <div class="stat expert-stat spin-diag" id="rowSpinNorm" style="display:none"><span class="stat-label" title="Σ(|↑|²+|↓|²) over spinComps — must equal 1.0000 (spinor normalisation).">Spinor norm</span><span class="stat-val" id="stSpinNorm">—</span></div>
-            <div class="stat expert-stat spin-diag" id="rowSpinCurl" style="display:none"><span class="stat-label" title="Speed |v| at orbital peak with Pauli–Bohm guidance. Non-zero for m=0 orbitals with spin = confirmation the spin-curl term ∇×S/2ρ is active. Zero for 1s (any spin) and for pure-spin eigenstates.">|v| at peak (a.u.)</span><span class="stat-val" id="stSpinCurl">—</span></div>
+            <div class="stat expert-stat spin-diag" id="rowSpinFrac" style="display:none"><span class="stat-label"
+                title="Measured ρ↑/(ρ↑+ρ↓) from voxel grid vs analytical expectation cos²(θ/2). Should match to &lt;1% for product states.">ρ↑
+                frac / expect</span><span class="stat-val" id="stSpinFrac">—</span></div>
+            <div class="stat expert-stat spin-diag" id="rowSpinNorm" style="display:none"><span class="stat-label"
+                title="Σ(|↑|²+|↓|²) over spinComps — must equal 1.0000 (spinor normalisation).">Spinor norm</span><span
+                class="stat-val" id="stSpinNorm">—</span></div>
+            <div class="stat expert-stat spin-diag" id="rowSpinCurl" style="display:none"><span class="stat-label"
+                title="Speed |v| at orbital peak with Pauli–Bohm guidance. Non-zero for m=0 orbitals with spin = confirmation the spin-curl term ∇×S/2ρ is active. Zero for 1s (any spin) and for pure-spin eigenstates.">|v|
+                at peak (a.u.)</span><span class="stat-val" id="stSpinCurl">—</span></div>
           </div>
         </div>
       </div>
@@ -209,6 +215,162 @@
 
       <div class="hint">🖱 Drag to rotate &nbsp;·&nbsp; Scroll to zoom</div>
       <div class="legend" id="legend"></div>
+      <button id="theoryBtn" onclick="toggleTheory()" title="Show theory &amp; equations">?</button>
+
+      <!-- ═══ THEORY PANEL ═══════════════════════════════════════════ -->
+      <div id="theoryPanel" style="display:none">
+        <div class="tp-header">
+          <span class="tp-title">Theory &amp; Equations</span>
+          <button class="tp-close" onclick="toggleTheory()">×</button>
+        </div>
+        <div class="tp-body">
+
+          <section class="tp-sec">
+            <h2>1 &mdash; Hydrogen Eigenstates</h2>
+            <p>The time-independent Schr&ouml;dinger equation <code>Hψ = Eψ</code> for hydrogen has exact solutions
+              labelled by three integers:</p>
+            <div class="tp-eq">ψ<sub>n,l,m</sub>(r,θ,φ) = R<sub>nl</sub>(r) &middot; Y<sub>l</sub><sup>m</sup>(θ,φ)
+            </div>
+            <table class="tp-tbl">
+              <tr>
+                <th>Symbol</th>
+                <th>Name</th>
+                <th>Range</th>
+                <th>Controls</th>
+              </tr>
+              <tr>
+                <td>n</td>
+                <td>Principal</td>
+                <td>1, 2, 3…</td>
+                <td>Energy: E<sub>n</sub> = −13.6/n² eV</td>
+              </tr>
+              <tr>
+                <td>l</td>
+                <td>Angular</td>
+                <td>0 … n−1</td>
+                <td>Shape: s(sphere), p(dumbbell), d(clover)…</td>
+              </tr>
+              <tr>
+                <td>m</td>
+                <td>Magnetic</td>
+                <td>−l … +l</td>
+                <td>Orientation &amp; circulation speed</td>
+              </tr>
+            </table>
+            <p>R<sub>nl</sub> are the associated Laguerre radial functions; Y<sub>l</sub><sup>m</sup> are spherical
+              harmonics. The orbital density is ρ = |ψ|&sup2;.</p>
+          </section>
+
+          <section class="tp-sec">
+            <h2>2 &mdash; Bohmian (de Broglie&ndash;Bohm) Mechanics</h2>
+            <p>Particles have definite positions at all times, guided by a velocity field derived from the wave
+              function:</p>
+            <div class="tp-eq"><b>v</b> = (ħ/m<sub>e</sub>) Im(&nabla;ψ / ψ)</div>
+            <p>In atomic units (ħ = m<sub>e</sub> = 1) this simplifies to <b>v</b> = Im(&nabla;ψ/ψ).<br>
+              For a real wave function Im(&nabla;ψ/ψ) = 0, so particles are <em>completely static</em> &mdash; this is
+              why m=0 orbitals show frozen particles without spin.<br>
+              For m &ne; 0: ψ ∝ e<sup>imφ</sup>, giving azimuthal circulation at speed <b>v</b><sub>φ</sub> = m / (r
+              sinθ).<br>
+              The key theorem (<em>equivariance</em>) guarantees that if particles start distributed as |ψ|&sup2;, they
+              remain so forever &mdash; the distribution is preserved by the flow.</p>
+          </section>
+
+          <section class="tp-sec">
+            <h2>3 &mdash; Pauli&ndash;Bohm Spin Extension</h2>
+            <p>For a spin-&frac12; particle the wave function becomes a two-component spinor:</p>
+            <div class="tp-eq">Ψ = (ψ<sub>&uarr;</sub>, ψ<sub>&darr;</sub>)<sup>T</sup> &nbsp;&nbsp; ρ =
+              |ψ<sub>&uarr;</sub>|&sup2; + |ψ<sub>&darr;</sub>|&sup2;</div>
+            <p>The guidance equation gains a second term, the <em>spin-curl</em>:</p>
+            <div class="tp-eq"><b>v</b><sub>P</sub> = Im(Ψ<sup>&dagger;</sup>&nabla;Ψ) / ρ &nbsp;+&nbsp;
+              (&nabla;&times;<b>S</b>) / (2ρ)</div>
+            <p>where <b>S</b> = Ψ<sup>&dagger;</sup><b>&sigma;</b>Ψ is the spin density vector and <b>&sigma;</b> are
+              the Pauli matrices.<br>
+              The first term is the standard convective current (zero for real or m=0 orbitals).<br>
+              The second term is new: it is non-zero whenever the spin texture <b>S</b>(<b>r</b>) has a curl &mdash;
+              i.e. whenever the spin density varies in space with a vortex structure.</p>
+            <p class="tp-highlight">Consequence: a 2p<sub>0</sub> orbital (m=0, frozen in scalar Bohm) acquires moving
+              particles when spin is added, because &nabla;&times;<b>S</b> = &nabla;&rho; &times; <b>n&#x0302;</b> &ne;
+              <b>0</b>
+              whenever &nabla;&rho; and <b>n&#x0302;</b> are not everywhere parallel &mdash; which holds for any choice
+              of spin direction, including <b>n&#x0302;</b> = <b>&#x1D499;</b>. This is the core new physics from the
+              Bohm&ndash;Schiller&ndash;Tiomno framework.</p>
+            <h3>Analytical prediction &mdash; 1s + product spin</h3>
+            <p>For 1s &otimes; |<b>n&#x0302;</b>&rang; (orbital &times; fixed spin direction):<br>
+              <b>S</b> = &rho;(<b>r</b>) <b>n&#x0302;</b> &nbsp;&rArr;&nbsp; &nabla;&times;<b>S</b> = &nabla;&rho;
+              &times; <b>n&#x0302;</b><br>
+              For 1s: &nabla;&rho; = &minus;2&rho; <b>r&#x0302;</b>,&nbsp; so:
+            </p>
+            <div class="tp-eq"><b>v</b> = &minus;(<b>r&#x0302;</b> &times; <b>n&#x0302;</b>) &nbsp;&nbsp; |<b>v</b>| =
+              sin &ang;(<b>r&#x0302;</b>, <b>n&#x0302;</b>)</div>
+            <p>The speed is independent of r &mdash; particles orbit the spin axis at a constant speed set only by their
+              angular position. This is analytically verifiable (see Expert &rarr; Verify below).</p>
+          </section>
+
+          <section class="tp-sec">
+            <h2>4 &mdash; Spin Modes in this App</h2>
+            <h3>Product mode</h3>
+            <p>Ψ = ψ<sub>n,l,m</sub>(<b>r</b>) &otimes; |<b>n&#x0302;</b>&rang; &nbsp; where &nbsp;
+              |<b>n&#x0302;</b>&rang; = cos(θ/2)|&uarr;&rang; + e<sup>iφ</sup>sin(θ/2)|&darr;&rang;<br>
+              The θ slider rotates the spin axis; φ rotates it azimuthally. This is a <em>coherent spin state</em> on
+              the Bloch sphere. Orbital and spin degrees of freedom are independent (not entangled).<br>
+              Physically this approximates the state immediately after optical pumping, before spin-orbit coupling
+              entangles the two sectors.</p>
+            <h3>j-state mode</h3>
+            <p>The full hydrogen Hamiltonian includes the spin-orbit term H<sub>SO</sub> &prop;
+              <b>L</b>&middot;<b>S</b>. Its eigenstates are labelled by total angular momentum j = l &plusmn; &frac12;
+              and projection m<sub>j</sub>. They are built from orbital and spin components via Clebsch&ndash;Gordan
+              coefficients:
+            </p>
+            <div class="tp-eq">|j=3/2, m<sub>j</sub>=+1/2&rang; = &radic;(2/3)|m=0&rang;|&uarr;&rang; +
+              &radic;(1/3)|m=+1&rang;|&darr;&rang;</div>
+            <p>These are the physically correct stationary states of hydrogen including fine structure. The j-state
+              dropdown auto-builds all valid states for whatever (n,l) orbital is currently selected.</p>
+            <p><em>Note:</em> for l=0 (s orbitals), <b>L</b> = 0 so spin&ndash;orbit coupling vanishes. The j-states
+              reduce to pure |&uarr;&rang; (m<sub>j</sub>=+&frac12;) or |&darr;&rang; (m<sub>j</sub>=&minus;&frac12;),
+              equivalent to product mode with &theta;=0 or &theta;=&pi;. For any other spin direction, use product mode.
+            </p>
+          </section>
+
+          <section class="tp-sec">
+            <h2>5 &mdash; Approximations &amp; Limitations</h2>
+            <ul class="tp-list">
+              <li>Non-relativistic: the Dirac equation is not used. Fine-structure energies are not simulated, only the
+                spatial guidance.</li>
+              <li>No radiation reaction: the electron does not emit photons along its Bohmian trajectory.</li>
+              <li>No electron&ndash;electron interaction: hydrogen only (one electron).</li>
+              <li>Product states are not physical eigenstates when l &ne; 0 &mdash; they are initial conditions that
+                would evolve under H<sub>SO</sub>.</li>
+              <li>The spin-curl velocity is computed by finite differences (h = 0.07 a₀). Numerical errors are largest
+                near nodal surfaces where &rho; &rarr; 0.</li>
+            </ul>
+          </section>
+
+          <section class="tp-sec">
+            <h2>6 &mdash; References</h2>
+            <ul class="tp-list">
+              <li>Bohm, D. (1952). <em>A Suggested Interpretation of the Quantum Theory in Terms of &lsquo;Hidden&rsquo;
+                  Variables. I &amp; II.</em> Physical Review, 85, 166&ndash;179 and 180&ndash;193.</li>
+              <li>Bohm, D., Schiller, R. &amp; Tiomno, J. (1955). <em>A causal interpretation of the Pauli equation
+                  (A).</em> Il Nuovo Cimento, Suppl. 1, 48&ndash;66. DOI: 10.1007/BF02743528. [Foundational paper
+                deriving the spin-curl guidance term implemented here]</li>
+              <li>Bohm, D. &amp; Schiller, R. (1955). <em>A causal interpretation of the Pauli equation (B).</em> Il
+                Nuovo Cimento, Suppl. 1, 67&ndash;91. DOI: 10.1007/BF02743529.</li>
+              <li>Holland, P. R. (1993). <em>The Quantum Theory of Motion: An Account of the de Broglie&ndash;Bohm
+                  Causal Interpretation of Quantum Mechanics.</em> Cambridge University Press. [Ch. 9 covers spin]</li>
+              <li>Bohm, D. &amp; Hiley, B. J. (1993). <em>The Undivided Universe: An Ontological Interpretation of
+                  Quantum Theory.</em> Routledge.</li>
+              <li>D&uuml;rr, D., Goldstein, S. &amp; Zangh&igrave;, N. (1992). <em>Quantum Equilibrium and the Origin of
+                  Absolute Uncertainty.</em> Journal of Statistical Physics, 67, 843&ndash;907. arXiv:<a
+                  href="https://arxiv.org/abs/quant-ph/0308039" target="_blank">quant-ph/0308039</a>. [Proves
+                equivariance: |\u03c8|&sup2; distribution is preserved by Bohmian flow]</li>
+              <li>BYU Theory Group (2005). Unpublished preprint on Pauli&ndash;Bohm spin guidance in hydrogenic
+                orbitals. URL provided by user; content not publicly accessible at time of writing.</li>
+            </ul>
+          </section>
+
+        </div>
+      </div>
+      <!-- ═══════════════════════════════════════════════════════════ -->
 
       <div class="info">
         <span class="ket" id="infoKet">|2, 1, +1⟩</span>

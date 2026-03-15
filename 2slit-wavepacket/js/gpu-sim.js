@@ -174,6 +174,70 @@ void main() {
   oC = vec4(R*decay, I_new*decay, 0.0, 1.0);
 }`;
 
+// ─── RK4: dψ/dt = (iℏ/2m)∇²ψ in split real/imag form ───────
+// Computes (dR/dt, dI/dt) = (-cY·∇²I, +cX·∇²R) using the 5-point stencil.
+// Dirichlet BC enforced via uMask: ψ=0 at boundary and barrier pixels.
+// Only 5 texelFetch calls (reads rg pair per neighbour).
+// dψ/dt = (iℏ/2m)∇²ψ  (free Schrödinger, no CAP here)
+// CAP is applied as an unconditionally-stable operator-split exp(-Γ·dt)
+// in FS_RK_FINAL. Embedding Γ here would require Γ·dt ≤ 2.785 (RK4 stability
+// limit) but our Γ·dt can reach absStrength ≫ 1, causing blow-up.
+const FS_RK_DERIV = `#version 300 es
+precision highp float;
+uniform sampler2D uPsi;
+uniform sampler2D uMask;
+uniform float uCX;   // hbar / (2m * dx^2)
+uniform float uCY;   // hbar / (2m * dy^2)
+out vec4 oC;
+void main() {
+  ivec2 c  = ivec2(gl_FragCoord.xy);
+  ivec2 sz = textureSize(uPsi, 0);
+  if (c.x<=0||c.x>=sz.x-1||c.y<=0||c.y>=sz.y-1||texelFetch(uMask,c,0).r<0.5){
+    oC = vec4(0.0,0.0,0.0,1.0); return;
+  }
+  vec2 C  = texelFetch(uPsi, c,               0).rg;
+  vec2 Xp = texelFetch(uPsi, c+ivec2( 1, 0), 0).rg;
+  vec2 Xm = texelFetch(uPsi, c+ivec2(-1, 0), 0).rg;
+  vec2 Yp = texelFetch(uPsi, c+ivec2( 0, 1), 0).rg;
+  vec2 Ym = texelFetch(uPsi, c+ivec2( 0,-1), 0).rg;
+  vec2 lapl = uCX*(Xp+Xm-2.0*C) + uCY*(Yp+Ym-2.0*C);
+  oC = vec4(-lapl.g, lapl.r, 0.0, 1.0);
+}`;
+
+// ─── RK4: dst = base + scale * delta (staging & accumulation) ─
+const FS_RK_AXPY = `#version 300 es
+precision highp float;
+uniform sampler2D uBase;
+uniform sampler2D uDelta;
+uniform float uScale;
+out vec4 oC;
+void main() {
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  vec2 b  = texelFetch(uBase,  c, 0).rg;
+  vec2 d  = texelFetch(uDelta, c, 0).rg;
+  oC = vec4(b + uScale*d, 0.0, 1.0);
+}`;
+
+// ─── RK4: final step — psi_new = (psi_n + dt6*accum) * capdecay ───
+// Operator split: free SE integrated by RK4; then CAP exp(-Γ·dt) applied
+// multiplicatively (unconditionally stable for any Γ·dt).
+const FS_RK_FINAL = `#version 300 es
+precision highp float;
+uniform sampler2D uPsi;
+uniform sampler2D uAccum;
+uniform sampler2D uMask;
+uniform sampler2D uCapDecay;
+uniform float uDt6;
+out vec4 oC;
+void main() {
+  ivec2 c = ivec2(gl_FragCoord.xy);
+  if (texelFetch(uMask, c, 0).r < 0.5) { oC = vec4(0.0,0.0,0.0,1.0); return; }
+  vec2 psi   = texelFetch(uPsi,   c, 0).rg;
+  vec2 acc   = texelFetch(uAccum, c, 0).rg;
+  float dec  = texelFetch(uCapDecay, c, 0).r;
+  oC = vec4((psi + uDt6*acc) * dec, 0.0, 1.0);
+}`;
+
 // ─── Export class ─────────────────────────────────────────────
 export class GPUSim {
   constructor() {
@@ -183,21 +247,33 @@ export class GPUSim {
     document.body.appendChild(canvas);
     this._canvas = canvas;
 
-    const gl = canvas.getContext('webgl2');
-    if (!gl) throw new Error('WebGL2 not available');
-    if (!gl.getExtension('EXT_color_buffer_float'))
-      throw new Error('EXT_color_buffer_float not supported');
+    const gl = canvas.getContext('webgl2', { powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false });
+    if (!gl) throw new Error('WebGL2 not available (hardware acceleration may be disabled in your browser)');
+    const ext = gl.getExtension('EXT_color_buffer_float');
+    if (!ext) throw new Error('EXT_color_buffer_float not supported (GPU driver may not support float render targets)');
+    // Log renderer info for diagnostics
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    if (dbg) {
+      const vendor   = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL);
+      const renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
+      console.info(`[GPUSim] WebGL2 renderer: ${vendor} / ${renderer}`);
+      if (/SwiftShader|llvmpipe|softpipe|Microsoft Basic/i.test(renderer))
+        throw new Error(`Software renderer detected (${renderer}) — GPU driver not accelerating WebGL`);
+    }
     this.gl = gl;
 
     this._buildQuad();
     this._progs = {
-      cmul : this._prog(VS, FS_CMUL),
-      fft  : this._prog(VS, FS_FFT),
-      abs  : this._prog(VS, FS_ABS),
-      rho  : this._prog(VS, FS_RHO),
-      mask : this._prog(VS, FS_MASK),
-      fdR  : this._prog(VS, FS_FD_R),
-      fdI  : this._prog(VS, FS_FD_I),
+      cmul    : this._prog(VS, FS_CMUL),
+      fft     : this._prog(VS, FS_FFT),
+      abs     : this._prog(VS, FS_ABS),
+      rho     : this._prog(VS, FS_RHO),
+      mask    : this._prog(VS, FS_MASK),
+      fdR     : this._prog(VS, FS_FD_R),
+      fdI     : this._prog(VS, FS_FD_I),
+      rkDeriv : this._prog(VS, FS_RK_DERIV),
+      rkAxpy  : this._prog(VS, FS_RK_AXPY),
+      rkFinal : this._prog(VS, FS_RK_FINAL),
     };
 
     this.simTime = 0;
@@ -350,10 +426,12 @@ export class GPUSim {
       sigmax = 6e-9, sigmay = 10e-9, xfrac = 0.20,
       slitX = 0.5, slitCenterY1 = 0.422, slitCenterY2 = 0.578,
       slitHalfWidth = 0.039,
-      absThick = 0.15, absStrength = 35,
+      absThick = 0.25, absStrength = 120,
       fdMode = false,
+      rkMode = false,
     } = cfg;
     this._fdMode = fdMode;
+    this._rkMode = rkMode;
 
     // Clean up old GL resources
     if (this._tex) {
@@ -361,26 +439,39 @@ export class GPUSim {
       Object.values(this._fbo).forEach(f => gl.deleteFramebuffer(f));
     }
 
-    this.Nx = Nx; this.Ny = Ny;
-    this.Lx = Lx; this.Ly = Ly; this.Dt = Dt;
-    this._Nx_log2 = Math.round(Math.log2(Nx));
+    // Double the domain in X transparently: GPU runs simNx×Ny,
+    // readback exports only the central Nx columns (the displayed region).
+    // This gives the wave a hidden absorption margin on both sides.
+    const simNx    = Nx * 2;
+    const dispOffX = Nx / 2;       // first displayed column in the sim grid
+    this.Nx        = simNx;        // used by GL steps / FFT / readback
+    this.dispNx    = Nx;           // exported display width
+    this._dispOffX = dispOffX;
+    this.Ny = Ny;
+    this.Lx = Lx; this.Ly = Ly; this.Dt = Dt;  // Lx/Ly are display physical sizes
+    this._Nx_log2 = Math.round(Math.log2(simNx));
     this._Ny_log2 = Math.round(Math.log2(Ny));
     this._absThick    = absThick;
     this._absStrength = absStrength;
-    this._canvas.width = Nx; this._canvas.height = Ny;
+    this._canvas.width = simNx; this._canvas.height = Ny;
 
     const Dx = Lx / (Nx - 1), Dy = Ly / (Ny - 1);
-    const dkx = 2 * Math.PI / Lx;
+    const simLx = Dx * (simNx - 1);   // exact same Δx, domain ≈ 2×Lx
+    // Convert display-fraction → sim-fraction: sim_frac = (dispOffX + f*(Nx-1))/(simNx-1)
+    const toSimFrac = f => (dispOffX + f * (Nx - 1)) / (simNx - 1);
+    const simXfrac  = toSimFrac(xfrac);
+    const simSlitX  = toSimFrac(slitX);
+    const dkx = 2 * Math.PI / simLx;
     const dky = 2 * Math.PI / Ly;
 
     // ── Initial wavefunction ────────────────────────────────
     // Layout: RGBA32F tex, pixel (ix, iy) = grid point (ix, iy)
     // texImage2D upload is row-major: data[iy*Nx+ix] → pixel (ix, iy=row)
-    const psi0Data = new Float32Array(Nx * Ny * 4);
-    const x0 = xfrac * Lx, y0 = Ly / 2;
+    const psi0Data = new Float32Array(simNx * Ny * 4);
+    const x0 = simXfrac * simLx, y0 = Ly / 2;
     const noX = Math.pow(1 / (2 * Math.PI * sigmax * sigmax), 0.25) / Math.SQRT2;
     const noY = Math.pow(1 / (2 * Math.PI * sigmay * sigmay), 0.25) / Math.SQRT2;
-    for (let ix = 0; ix < Nx; ix++) {
+    for (let ix = 0; ix < simNx; ix++) {
       const x   = ix * Dx;
       const gx  = noX * Math.exp(-((x - x0) ** 2) / (4 * sigmax ** 2));
       const phx = ME * velox * (x - x0) / HB;
@@ -390,7 +481,7 @@ export class GPUSim {
         const gy  = noY * Math.exp(-((y - y0) ** 2) / (4 * sigmay ** 2));
         const phy = ME * veloy * (y - y0) / HB;
         const pyR = gy * Math.cos(phy), pyI = gy * Math.sin(phy);
-        const i4  = (iy * Nx + ix) * 4;           // row-major RGBA
+        const i4  = (iy * simNx + ix) * 4;        // row-major RGBA
         psi0Data[i4    ] = pxR * pyR - pxI * pyI; // Re
         psi0Data[i4 + 1] = pxR * pyI + pxI * pyR; // Im
         // B, A channels unused → 0, 1
@@ -399,26 +490,26 @@ export class GPUSim {
     }
     // Normalise
     let norm2 = 0;
-    for (let i = 0; i < Nx * Ny * 4; i += 4)
+    for (let i = 0; i < simNx * Ny * 4; i += 4)
       norm2 += psi0Data[i] ** 2 + psi0Data[i + 1] ** 2;
     const invN = 1 / Math.sqrt(norm2 * Dx * Dy);
-    for (let i = 0; i < Nx * Ny * 4; i += 4) {
+    for (let i = 0; i < simNx * Ny * 4; i += 4) {
       psi0Data[i    ] *= invN;
       psi0Data[i + 1] *= invN;
     }
 
     // ── V propagator (half-step: exp(-i V Δt / 2ℏ)) ────────
-    const vpropData = new Float32Array(Nx * Ny * 4);
+    const vpropData = new Float32Array(simNx * Ny * 4);
     const QE_local = 1.602176634e-19;
     const barrierV = 10 * QE_local;
     const barrierThick = 6;
-    const biX0 = Math.floor(slitX * (Nx - 1));
+    const biX0 = Math.floor(simSlitX * (simNx - 1));
     const j1c  = Math.floor(slitCenterY1 * (Ny - 1));
     const j2c  = Math.floor(slitCenterY2 * (Ny - 1));
     const hw   = Math.floor(slitHalfWidth * (Ny - 1));
-    for (let ix = 0; ix < Nx; ix++) {
+    for (let ix = 0; ix < simNx; ix++) {
       for (let iy = 0; iy < Ny; iy++) {
-        const i4 = (iy * Nx + ix) * 4;
+        const i4 = (iy * simNx + ix) * 4;
         let v = 0;
         if (ix >= biX0 && ix < biX0 + barrierThick) {
           const inSlit1 = Math.abs(iy - j1c) <= hw;
@@ -439,9 +530,9 @@ export class GPUSim {
     // Total per full step = exp(-absStrength * d²) — same magnitude as before,
     // but correctly bracketing the FFT.
     const HPI = Math.PI / 2;
-    for (let ix = 0; ix < Nx; ix++) {
+    for (let ix = 0; ix < simNx; ix++) {
       for (let iy = 0; iy < Ny; iy++) {
-        const fx = ix / Math.max(Nx - 1, 1);
+        const fx = ix / Math.max(simNx - 1, 1);
         const fy = iy / Math.max(Ny - 1, 1);
         let sx = 1.0, sy = 1.0;
         if (fx < absThick)       sx = Math.sin(fx              / absThick * HPI);
@@ -450,27 +541,27 @@ export class GPUSim {
         else if (fy > 1-absThick) sy = Math.sin((1 - fy)        / absThick * HPI);
         const dx = 1 - sx, dy = 1 - sy;
         const decay = Math.exp(-absStrength * 0.5 * (dx * dx + dy * dy));
-        const i4 = (iy * Nx + ix) * 4;
+        const i4 = (iy * simNx + ix) * 4;
         vpropData[i4    ] *= decay;
         vpropData[i4 + 1] *= decay;
       }
     }
 
     // bmask = all ones (no barrier absorption mask needed; domain-edge absorber handles it)
-    const bmaskData = new Float32Array(Nx * Ny * 4);
-    for (let i = 0; i < Nx * Ny * 4; i += 4) {
+    const bmaskData = new Float32Array(simNx * Ny * 4);
+    for (let i = 0; i < simNx * Ny * 4; i += 4) {
       bmaskData[i    ] = 1.0;
       bmaskData[i + 3] = 1.0;
     }
 
     // ── T propagator (full-step in k-space, natural FFT order) ─
-    const tpropData = new Float32Array(Nx * Ny * 4);
-    for (let ix = 0; ix < Nx; ix++) {
-      const kx = ix < Nx / 2 ? ix * dkx : (ix - Nx) * dkx;
+    const tpropData = new Float32Array(simNx * Ny * 4);
+    for (let ix = 0; ix < simNx; ix++) {
+      const kx = ix < simNx / 2 ? ix * dkx : (ix - simNx) * dkx;
       for (let iy = 0; iy < Ny; iy++) {
         const ky  = iy < Ny / 2 ? iy * dky : (iy - Ny) * dky;
         const ang = HB * (kx * kx + ky * ky) / (2 * ME) * Dt;
-        const i4  = (iy * Nx + ix) * 4;
+        const i4  = (iy * simNx + ix) * 4;
         tpropData[i4    ] =  Math.cos(ang);
         tpropData[i4 + 1] = -Math.sin(ang);
         tpropData[i4 + 3] = 1.0;
@@ -479,10 +570,10 @@ export class GPUSim {
 
     // ── FD: barrier mask (0 at barrier pixels, 1 elsewhere) ─
     // Also used in FD leapfrog to enforce ψ=0 inside walls.
-    const fdmaskData = new Float32Array(Nx * Ny * 4);
-    for (let ix = 0; ix < Nx; ix++) {
+    const fdmaskData = new Float32Array(simNx * Ny * 4);
+    for (let ix = 0; ix < simNx; ix++) {
       for (let iy = 0; iy < Ny; iy++) {
-        const i4 = (iy * Nx + ix) * 4;
+        const i4 = (iy * simNx + ix) * 4;
         let isWall = 0;
         if (ix >= biX0 && ix < biX0 + barrierThick) {
           const inSlit1 = Math.abs(iy - j1c) <= hw;
@@ -498,11 +589,11 @@ export class GPUSim {
     // d = 1 - sin(depth*π/2), ranges 0 (interior edge) → 1 (boundary)
     // Applied once per full step, provides smooth attenuation before
     // the hard Dirichlet zero at the boundary pixel.
-    const capdecayData = new Float32Array(Nx * Ny * 4);
+    const capdecayData = new Float32Array(simNx * Ny * 4);
     const HPI2 = Math.PI / 2;
-    for (let ix = 0; ix < Nx; ix++) {
+    for (let ix = 0; ix < simNx; ix++) {
       for (let iy = 0; iy < Ny; iy++) {
-        const fx = ix / Math.max(Nx - 1, 1);
+        const fx = ix / Math.max(simNx - 1, 1);
         const fy = iy / Math.max(Ny - 1, 1);
         let sx = 1.0, sy = 1.0;
         if (fx < absThick)        sx = Math.sin(fx        / absThick * HPI2);
@@ -511,53 +602,88 @@ export class GPUSim {
         else if (fy > 1-absThick) sy = Math.sin((1-fy)    / absThick * HPI2);
         const ddx = 1 - sx, ddy = 1 - sy;
         const decay = Math.exp(-absStrength * (ddx * ddx + ddy * ddy));
-        const i4 = (iy * Nx + ix) * 4;
+        const i4 = (iy * simNx + ix) * 4;
         capdecayData[i4    ] = decay;
         capdecayData[i4 + 3] = 1.0;
       }
     }
 
-    // ── FD coefficients (stored for use in _stepFDOnce) ───────
+    // ── FD coefficients (stored for use in _stepFDOnce and _stepRK4Once) ───────
     // Dx and Dy already declared above
-    this._AX = HB * Dt / (2 * ME * Dx * Dx);  // ℏ·dt / (2m·dx²)
+    this._AX = HB * Dt / (2 * ME * Dx * Dx);  // ℏ·dt / (2m·dx²)  (FD leapfrog)
     this._AY = HB * Dt / (2 * ME * Dy * Dy);
+    this._CX = HB / (2 * ME * Dx * Dx);        // ℏ / (2m·dx²)  (RK4 derivative, no Dt)
+    this._CY = HB / (2 * ME * Dy * Dy);
 
     // ── Allocate textures ───────────────────────────────────
     const T = {
-      psi0     : this._mkTex(Nx, Ny, psi0Data),
-      psi1     : this._mkTex(Nx, Ny, null),
-      ping     : this._mkTex(Nx, Ny, null),
-      pong     : this._mkTex(Nx, Ny, null),
-      vprop    : this._mkTex(Nx, Ny, vpropData),
-      tprop    : this._mkTex(Nx, Ny, tpropData),
-      bmask    : this._mkTex(Nx, Ny, bmaskData),
-      fdmask   : this._mkTex(Nx, Ny, fdmaskData),
-      capdecay : this._mkTex(Nx, Ny, capdecayData),
+      psi0     : this._mkTex(simNx, Ny, psi0Data),
+      psi1     : this._mkTex(simNx, Ny, null),
+      ping     : this._mkTex(simNx, Ny, null),
+      pong     : this._mkTex(simNx, Ny, null),
+      vprop    : this._mkTex(simNx, Ny, vpropData),
+      tprop    : this._mkTex(simNx, Ny, tpropData),
+      bmask    : this._mkTex(simNx, Ny, bmaskData),
+      fdmask   : this._mkTex(simNx, Ny, fdmaskData),
+      capdecay : this._mkTex(simNx, Ny, capdecayData),
+      // RK4 scratch: rkz = permanent zero texture (read-only),
+      //              rkk = current ki,  rka/rkb = accumulator ping-pong.
+      // caprate  = Γ/ℏ per pixel (CAP rate baked for use in DERIV shader).
+      caprate  : this._mkTex(simNx, Ny, (() => {
+        const d = new Float32Array(simNx * Ny * 4);
+        for (let ix = 0; ix < simNx; ix++) {
+          for (let iy = 0; iy < Ny; iy++) {
+            const fx = ix / Math.max(simNx - 1, 1);
+            const fy = iy / Math.max(Ny - 1, 1);
+            let sx = 1.0, sy = 1.0;
+            if (fx < absThick)        sx = Math.sin(fx     / absThick * HPI2);
+            else if (fx > 1-absThick) sx = Math.sin((1-fx) / absThick * HPI2);
+            if (fy < absThick)        sy = Math.sin(fy     / absThick * HPI2);
+            else if (fy > 1-absThick) sy = Math.sin((1-fy) / absThick * HPI2);
+            const ddx = 1 - sx, ddy = 1 - sy;
+            // Γ (s⁻¹) such that exp(-Γ·Dt) = exp(-absStrength·d²) per step.
+            // i.e. Γ = absStrength * d² / Dt
+            const i4 = (iy * simNx + ix) * 4;
+            d[i4    ] = absStrength * (ddx * ddx + ddy * ddy) / Dt;
+            d[i4 + 3] = 1.0;
+          }
+        }
+        return d;
+      })()),
+
+      rkz      : this._mkTex(simNx, Ny, new Float32Array(simNx * Ny * 4)),  // explicit zeros
+      rkk      : this._mkTex(simNx, Ny, null),
+      rka      : this._mkTex(simNx, Ny, null),
+      rkb      : this._mkTex(simNx, Ny, null),
     };
     this._tex = T;
 
-    // ── Allocate framebuffers ───────────────────────────────
+    // ── Allocate framebuffers ───────────────────────────────────
     this._fbo = {
       psi0 : this._mkFbo(T.psi0),
       psi1 : this._mkFbo(T.psi1),
       ping : this._mkFbo(T.ping),
       pong : this._mkFbo(T.pong),
+      rkk  : this._mkFbo(T.rkk),
+      rka  : this._mkFbo(T.rka),
+      rkb  : this._mkFbo(T.rkb),
     };
 
     this._cur = 0;   // psi is in psi0
     this.simTime = 0;
-    // Auto-stop time: packet travels full domain past the barrier
-    // ~1200 fs at default velox=1e5 m/s
-    this.stopTime = (Lx * (1 - xfrac) * 0.75) / velox;
+    // Auto-stop: time for wave to cross the sim domain AND for any FFT wrap-around
+    // reflection to travel back to the display's left edge (dispOffX columns at Dx each).
+    this.stopTime = (simLx * (1 - simXfrac) + dispOffX * Dx) / velox;
 
-    // CPU-side buffers
-    this._pixBuf = new Float32Array(Nx * Ny * 4); // RGBA readback
-    this.rho = new Float32Array(Nx * Ny);          // column-major output
-    this._psi = null;                              // set after first readback
+    // CPU-side buffers (pixBuf = full sim; rho/psi = display region only)
+    this._pixBuf = new Float32Array(simNx * Ny * 4); // RGBA readback (full sim)
+    this.rho = new Float32Array(Nx * Ny);             // column-major, display only
+    this._psi = null;                                 // set after first readback
 
     // ── Async PBO readback (double-buffered) ──────────────
-    const byteSize = Nx * Ny * 4 * 4; // RGBA × float32
+    const byteSize = simNx * Ny * 4 * 4; // RGBA × float32 (full sim)
     this._pbo = [gl.createBuffer(), gl.createBuffer()];
+    this._pboFence = [null, null];  // fenceSync per PBO slot
     this._pboIdx = 0;
     this._pboReady = false;
     for (const b of this._pbo) {
@@ -635,9 +761,49 @@ export class GPUSim {
     this.simTime += Dt;
   }
 
+  // ── RK4 single step (11 GPU passes, 4th-order, Dirichlet BC) ──
+  // \u03c8_{n+1} = \u03c8_n + (Dt/6)(k1 + 2k2 + 2k3 + k4)  then apply CAP decay.
+  // Staging: \u03c8_tmp = \u03c8_n + scale\u00b7ki,  accumulated in rka/rkb ping-pong.
+  // Barrier: Dirichlet \u03c8=0 enforced by fdmask (same as FD leapfrog).
+  _stepRK4Once() {
+    const { Nx, Ny, Dt } = this;
+    const p = this._progs, T = this._tex, F = this._fbo;
+    const cX = this._CX, cY = this._CY;
+    const psi_n = this._curTex();
+    const rkd = { uMask: T.fdmask, uCX: cX, uCY: cY };
+
+    // k1 = f(psi_n)
+    this._pass(p.rkDeriv, F.rkk,  Nx, Ny, { uPsi: psi_n,  ...rkd });
+    this._pass(p.rkAxpy,  F.rka,  Nx, Ny, { uBase: T.rkz,  uDelta: T.rkk, uScale: 1.0 });
+    this._pass(p.rkAxpy,  F.ping, Nx, Ny, { uBase: psi_n,  uDelta: T.rkk, uScale: Dt * 0.5 });
+
+    // k2 = f(psi_n + dt/2 * k1)
+    this._pass(p.rkDeriv, F.rkk,  Nx, Ny, { uPsi: T.ping,  ...rkd });
+    this._pass(p.rkAxpy,  F.rkb,  Nx, Ny, { uBase: T.rka,  uDelta: T.rkk, uScale: 2.0 });
+    this._pass(p.rkAxpy,  F.ping, Nx, Ny, { uBase: psi_n,  uDelta: T.rkk, uScale: Dt * 0.5 });
+
+    // k3 = f(psi_n + dt/2 * k2)
+    this._pass(p.rkDeriv, F.rkk,  Nx, Ny, { uPsi: T.ping,  ...rkd });
+    this._pass(p.rkAxpy,  F.rka,  Nx, Ny, { uBase: T.rkb,  uDelta: T.rkk, uScale: 2.0 });
+    this._pass(p.rkAxpy,  F.ping, Nx, Ny, { uBase: psi_n,  uDelta: T.rkk, uScale: Dt });
+
+    // k4 = f(psi_n + dt * k3)
+    this._pass(p.rkDeriv, F.rkk,  Nx, Ny, { uPsi: T.ping,  ...rkd });
+    this._pass(p.rkAxpy,  F.rkb,  Nx, Ny, { uBase: T.rka,  uDelta: T.rkk, uScale: 1.0 });
+
+    // psi_{n+1} = psi_n + (Dt/6)*(k1 + 2k2 + 2k3 + k4)
+    // No separate decay pass: CAP is already embedded in each ki above.
+    this._pass(p.rkFinal, this._nxtFBO(), Nx, Ny, {
+      uPsi: psi_n, uAccum: T.rkb, uMask: T.fdmask, uCapDecay: T.capdecay, uDt6: Dt / 6.0,
+    });
+    this._cur ^= 1;
+    this.simTime += Dt;
+  }
+
   // ── Public: advance n steps then read back ───────────────
   step(n) {
-    const stepFn = this._fdMode ? () => this._stepFDOnce()
+    const stepFn = this._rkMode ? () => this._stepRK4Once()
+                 : this._fdMode ? () => this._stepFDOnce()
                                 : () => this._stepOnce();
     for (let i = 0; i < n; i++) stepFn();
     this._readback();
@@ -655,20 +821,34 @@ export class GPUSim {
 
   // ── Async double-buffered PBO readback (every step) ──────
   // Kick off a non-blocking DMA copy into curPBO, then retrieve
-  // the *previous* frame's data from prevPBO — GPU never stalls.
+  // the *previous* frame's data from prevPBO — only after its fence signals.
   _readback() {
     const gl = this.gl;
     const { Nx, Ny } = this;
 
-    const curPBO  = this._pbo[ this._pboIdx];
-    const prevPBO = this._pbo[ this._pboIdx ^ 1];
+    const curSlot  =  this._pboIdx;
+    const prevSlot =  this._pboIdx ^ 1;
+    const curPBO   = this._pbo[curSlot];
+    const prevPBO  = this._pbo[prevSlot];
 
-    // Retrieve previous frame's pixels (already in VRAM→RAM by now)
+    // Retrieve previous frame's pixels — only once the GPU fence signals
     if (this._pboReady) {
-      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, prevPBO);
-      gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, this._pixBuf);
-      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
-      this._processBuf();
+      const fence = this._pboFence[prevSlot];
+      let ready = !fence; // no fence means synchronous init path already consumed it
+      if (fence) {
+        const status = gl.clientWaitSync(fence, 0, 0); // non-blocking poll
+        if (status === gl.ALREADY_SIGNALED || status === gl.CONDITION_SATISFIED) {
+          gl.deleteSync(fence);
+          this._pboFence[prevSlot] = null;
+          ready = true;
+        }
+      }
+      if (ready) {
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, prevPBO);
+        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, this._pixBuf);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+        this._processBuf();
+      }
     }
 
     // Enqueue non-blocking copy of current frame into curPBO
@@ -678,31 +858,45 @@ export class GPUSim {
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
+    // Place a fence so we only read back once the DMA transfer is complete
+    if (this._pboFence[curSlot]) gl.deleteSync(this._pboFence[curSlot]);
+    this._pboFence[curSlot] = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+    gl.flush(); // ensure the fence is submitted to the GPU command queue
+
     this._pboIdx  ^= 1;
     this._pboReady = true;
   }
 
   // ── Unpack pixBuf → rho + psi ─────────────────────────────
   _processBuf() {
-    const { Nx, Ny } = this;
+    // pixBuf spans the full simNx×Ny grid. Extract only the displayed columns.
+    const simNx    = this.Nx;         // internal sim width
+    const dispNx   = this.dispNx;     // displayed columns
+    const dispOffX = this._dispOffX;  // first displayed column
+    const Ny       = this.Ny;
     const buf = this._pixBuf;
     const rho = this.rho;
-    // _pixBuf layout: pixel (ix, iy) → buf[(iy*Nx+ix)*4]  (row-major, GL)
-    // rho output:     rho[ix*Ny+iy]  (column-major, matches worker convention)
-    for (let ix = 0; ix < Nx; ix++) {
+    // rho: column-major [dix*Ny+iy] where dix = display ix ∈ [0, dispNx)
+    for (let dix = 0; dix < dispNx; dix++) {
+      const ix = dix + dispOffX;
       for (let iy = 0; iy < Ny; iy++) {
-        const glIdx  = (iy * Nx + ix) * 4;
+        const glIdx = (iy * simNx + ix) * 4;
         const re = buf[glIdx], im = buf[glIdx + 1];
-        rho[ix * Ny + iy] = re * re + im * im;
+        rho[dix * Ny + iy] = re * re + im * im;
       }
     }
-    // psi in row-major layout for Bohmian gradient (re,im interleaved)
-    if (!this._psi || this._psi.length !== Nx * Ny * 2) {
-      this._psi = new Float32Array(Nx * Ny * 2);
+    // psi: row-major [(iy*dispNx+dix)*2] for Bohmian gradient
+    if (!this._psi || this._psi.length !== dispNx * Ny * 2) {
+      this._psi = new Float32Array(dispNx * Ny * 2);
     }
-    for (let i = 0; i < Nx * Ny; i++) {
-      this._psi[i * 2    ] = buf[i * 4    ];
-      this._psi[i * 2 + 1] = buf[i * 4 + 1];
+    for (let dix = 0; dix < dispNx; dix++) {
+      const ix = dix + dispOffX;
+      for (let iy = 0; iy < Ny; iy++) {
+        const glIdx  = (iy * simNx + ix) * 4;
+        const psiIdx = (iy * dispNx + dix) * 2;
+        this._psi[psiIdx    ] = buf[glIdx    ];
+        this._psi[psiIdx + 1] = buf[glIdx + 1];
+      }
     }
     this.psi = this._psi;
   }
@@ -711,7 +905,8 @@ export class GPUSim {
   get norm() {
     if (!this.rho) return 0;
     let s = 0;
-    for (let i = 0; i < this.Nx * this.Ny; i++) s += this.rho[i];
-    return s * (this.Lx / (this.Nx - 1)) * (this.Ly / (this.Ny - 1));
+    const dNx = this.dispNx;
+    for (let i = 0; i < dNx * this.Ny; i++) s += this.rho[i];
+    return s * (this.Lx / (dNx - 1)) * (this.Ly / (this.Ny - 1));
   }
 }

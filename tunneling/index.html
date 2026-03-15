@@ -33,40 +33,32 @@
     color: #a0e8ff;
     white-space: nowrap;
   }
-  .mode-tabs {
-    display: flex;
-    gap: 4px;
-  }
-  .mode-tab {
-    padding: 5px 16px;
-    border-radius: 6px;
-    border: 1px solid #334;
-    background: transparent;
-    color: #778;
-    cursor: pointer;
-    font-size: 0.82rem;
-    transition: all 0.15s;
-  }
-  .mode-tab.active {
-    background: #1a2a4a;
-    border-color: #4080c0;
+  /* engine selector */
+  #engine-sel {
+    width: 100%;
+    background: #101828;
     color: #80c0ff;
+    border: 1px solid #4080c0;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    outline: none;
   }
-  .mode-tab:hover:not(.active) { border-color: #556; color: #99a; }
 
   .main-layout {
     flex: 1;
     display: flex;
     min-height: 0;
   }
-  /* === NUMERICAL LAYOUT === */
-  #numerical-panel {
+  /* === UNIFIED MAIN PANEL LAYOUT === */
+  #main-panel {
     flex: 1;
     display: flex;
     min-height: 0;
     gap: 0;
   }
-  .num-left {
+  .main-left {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -74,7 +66,14 @@
     padding: 8px;
     gap: 6px;
   }
-  #canvas2d {
+  .canvas-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    gap: 6px;
+  }
+  #canvas2d, #canvas-ana-wave, #canvas-spec-wave {
     flex: 1;
     width: 100%;
     border-radius: 8px;
@@ -92,41 +91,7 @@
     overflow: hidden;
   }
   #canvas3d { width: 100%; height: 100%; display: block; }
-  #canvas-num-2d {
-    flex: 1;
-    width: 100%;
-    border-radius: 8px;
-    border: 1px solid #1a2a3a;
-    background: #04040e;
-    display: block;
-    min-height: 0;
-  }
-  #canvas-ana-2d, #canvas-spec-2d {
-    flex: 1;
-    width: 100%;
-    border-radius: 8px;
-    border: 1px solid #1a2a3a;
-    background: #04040e;
-    display: block;
-    min-height: 0;
-  }
-
-  /* === ANALYTICAL LAYOUT === */
-  #analytical-panel, #spectral-panel {
-    flex: 1;
-    display: flex;
-    min-height: 0;
-    gap: 0;
-  }
-  .ana-left {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    padding: 8px;
-    gap: 6px;
-  }
-  #canvas-ana-wave, #canvas-spec-wave {
+  #canvas-num-2d, #canvas-ana-2d, #canvas-spec-2d {
     flex: 1;
     width: 100%;
     border-radius: 8px;
@@ -245,38 +210,73 @@
 
 <header>
   <h1>⚛ Quantum Tunneling + Bohmian Mechanics</h1>
-  <div class="mode-tabs">
-    <button class="mode-tab active" id="tab-num" onclick="switchMode('numerical')">
-      Numerical — Wave Packet (TDSE)
-    </button>
-    <button class="mode-tab" id="tab-ana" onclick="switchMode('analytical')">
-      Analytical — Stationary State
-    </button>
-    <button class="mode-tab" id="tab-spec" onclick="switchMode('spectral')">
-      Exact Packet — Spectral (no boundaries)
-    </button>
-  </div>
 </header>
 
 <div class="main-layout">
 
-  <!-- ============================================================ -->
-  <!-- NUMERICAL PANEL                                              -->
-  <!-- ============================================================ -->
-  <div id="numerical-panel">
-    <div class="num-left">
-      <canvas id="canvas2d"></canvas>
-      <canvas id="canvas-num-2d" class="hidden"></canvas>
-      <div id="canvas3d-wrap">
-        <canvas id="canvas3d"></canvas>
+  <div id="main-panel">
+
+    <!-- ==================== CANVAS AREA ==================== -->
+    <div class="main-left">
+
+      <!-- Numerical canvas (hidden by default) -->
+      <div id="canvas-wrap-num" class="canvas-wrap hidden">
+        <canvas id="canvas2d"></canvas>
+        <canvas id="canvas-num-2d" class="hidden"></canvas>
+        <div id="canvas3d-wrap" style="display:none"><canvas id="canvas3d"></canvas></div>
       </div>
+
+      <!-- Analytical canvas (hidden by default) -->
+      <div id="canvas-wrap-ana" class="canvas-wrap hidden">
+        <canvas id="canvas-ana-wave"></canvas>
+        <canvas id="canvas-ana-2d" class="hidden"></canvas>
+      </div>
+
+      <!-- Spectral canvas (visible by default) -->
+      <div id="canvas-wrap-spec" class="canvas-wrap">
+        <canvas id="canvas-spec-wave"></canvas>
+        <canvas id="canvas-spec-2d" class="hidden"></canvas>
+      </div>
+
     </div>
-    <div class="controls-panel" id="ctrl-num">
+
+    <!-- ==================== CONTROLS SIDEBAR ==================== -->
+    <div class="controls-panel">
+
+      <!-- Engine selector -->
       <div class="ctrl-section">
+        <select id="engine-sel" onchange="switchMode(this.value)">
+          <option value="spectral" selected>Exact Packet (Spectral)</option>
+          <option value="numerical">Numerical (TDSE)</option>
+          <option value="analytical">Analytical (Stationary)</option>
+        </select>
+      </div>
+
+      <!-- ── SIMULATION (spectral) ── -->
+      <div class="ctrl-section" id="sec-sim-spec">
+        <div class="ctrl-title">Simulation</div>
+        <div class="ctrl-row">
+          <button class="ctrl-btn active" id="btn-spec-play" onclick="toggleSpecPlay()">⏸ Pause</button>
+          <button class="ctrl-btn" onclick="resetSpec(true, true)">↺ Reset</button>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Speed</span>
+          <input type="range" id="spec-speed-sl" min="1" max="30" step="1" value="8" oninput="updateSpecSlider('speed')">
+          <span class="ctrl-val" id="spec-speed-val">8</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Loop delay (s)</span>
+          <input type="range" id="spec-loop-sl" min="0" max="10" step="0.5" value="1.5" oninput="updateSpecSlider('loop')">
+          <span class="ctrl-val" id="spec-loop-val">1.5s</span>
+        </div>
+      </div>
+
+      <!-- ── SIMULATION (numerical) ── -->
+      <div class="ctrl-section hidden" id="sec-sim-num">
         <div class="ctrl-title">Simulation</div>
         <div class="ctrl-row">
           <button class="ctrl-btn active" id="btn-play" onclick="togglePlay()">⏸ Pause</button>
-          <button class="ctrl-btn" onclick="resetNum()">↺ Reset</button>
+          <button class="ctrl-btn" onclick="resetNum(true)">↺ Reset</button>
         </div>
         <div class="ctrl-row">
           <span class="ctrl-label">Speed</span>
@@ -289,215 +289,28 @@
           <span class="ctrl-val" id="num-loop-val">off</span>
         </div>
       </div>
-      <div class="ctrl-section">
-        <div class="ctrl-title">Wave Packet</div>
-        <div class="ctrl-row">
-          <span class="ctrl-label">Momentum k₀</span>
-          <input type="range" id="k0-sl" min="1" max="8" step="0.1" value="3.5" oninput="updateNumSlider('k0')">
-          <span class="ctrl-val" id="k0-val">3.5</span>
-        </div>
-        <div class="ctrl-row">
-          <span class="ctrl-label">Width σ</span>
-          <input type="range" id="sigma-sl" min="0.3" max="3" step="0.1" value="1.0" oninput="updateNumSlider('sigma')">
-          <span class="ctrl-val" id="sigma-val">1.0</span>
-        </div>
-      </div>
-      <div class="ctrl-section">
-        <div class="ctrl-title">Barrier</div>
-        <div class="ctrl-row">
-          <span class="ctrl-label">Height V₀</span>
-          <input type="range" id="V0-sl" min="0" max="20" step="0.5" value="7.0" oninput="updateNumSlider('V0')">
-          <span class="ctrl-val" id="V0-val">7.0</span>
-        </div>
-        <div class="ctrl-row">
-          <span class="ctrl-label">Width L</span>
-          <input type="range" id="bw-sl" min="0.2" max="5" step="0.1" value="1.5" oninput="updateNumSlider('bw')">
-          <span class="ctrl-val" id="bw-val">1.5</span>
-        </div>
-        <div class="ctrl-row">
-          <span class="ctrl-label">Shape</span>
-          <select id="barrier-shape" onchange="resetNum()" style="flex:1;background:#101828;color:#80b0d8;border:1px solid #304060;border-radius:4px;padding:3px;font-size:0.75rem;">
-            <option value="square">Square</option>
-            <option value="gaussian">Gaussian</option>
-            <option value="double">Double</option>
-          </select>
-        </div>
-      </div>
-      <div class="ctrl-section">
-        <div class="ctrl-title">Particles</div>
-        <div class="ctrl-row">
-          <span class="ctrl-label">Count</span>
-          <input type="range" id="np-sl" min="1" max="40" step="1" value="20" oninput="updateNumSlider('np')">
-          <span class="ctrl-val" id="np-val">20</span>
-        </div>
-        <div class="ctrl-row">
-          <button class="ctrl-btn active" id="btn-bohm" onclick="toggleBohm()">● Particles</button>
-        </div>
-      </div>
-      <div class="ctrl-section">
-        <div class="ctrl-title">View</div>
-        <div class="ctrl-row">
-          <button class="ctrl-btn active" id="btn-re" onclick="toggleLayer('re')">Re(ψ)</button>
-          <button class="ctrl-btn active" id="btn-im" onclick="toggleLayer('im')">Im(ψ)</button>
-        </div>
-        <div class="ctrl-row">
-          <button class="ctrl-btn active" id="btn-prob" onclick="toggleLayer('prob')">|ψ|²</button>
-          <button class="ctrl-btn active" id="btn-3d" onclick="toggle3D()">3D View</button>
-        </div>
-        <div class="ctrl-row">
-          <button class="ctrl-btn" id="btn-num-2d" onclick="toggle2DNum()">⬡ 2D View</button>
-        </div>
-        <div class="ctrl-row" id="row-num-sigy" style="display:none">
-          <span class="ctrl-label">σᵧ width</span>
-          <input type="range" id="num-sigy-sl" min="0.3" max="5" step="0.1" value="1.5" oninput="updateNumSlider('sigY')">
-          <span class="ctrl-val" id="num-sigy-val">1.5</span>
-        </div>
-      </div>
-      <div class="ctrl-section">
-        <div class="ctrl-title">Boundary Absorption (CAP)</div>
-        <div style="font-size:0.69rem;color:#4a6888;line-height:1.5;padding:2px 0 4px">
-          Absorbs outgoing waves at the<br>domain edges — kills FFT wrap-around.
-        </div>
-        <div class="ctrl-row">
-          <button class="ctrl-btn active" id="btn-cap" onclick="toggleCAP()">⬛ Absorb On</button>
-        </div>
-        <div class="ctrl-row">
-          <span class="ctrl-label">Strength</span>
-          <input type="range" id="cap-str-sl" min="0.05" max="2" step="0.05" value="0.4" oninput="updateNumSlider('capStr')">
-          <span class="ctrl-val" id="cap-str-val">0.40</span>
-        </div>
-      </div>
-      <div class="info-box" id="num-info">
-        <div><span class="lbl">Energy E:</span><span class="val" id="info-E">–</span></div>
-        <div><span class="lbl">E / V₀:</span><span class="val" id="info-EV">–</span></div>
-        <div><span class="lbl">Transmitted:</span><span class="val" id="info-T">–</span></div>
-        <div><span class="lbl">Reflected:</span><span class="val" id="info-R">–</span></div>
-        <div><span class="lbl">Time:</span><span class="val" id="info-time">–</span></div>
-        <div class="formula">ℏ = m = 1 (natural units)<br>E = k₀²/2</div>
-      </div>
-      <div class="legend">
-        <div class="leg-item"><div class="leg-dot" style="background:#3080ff"></div>Re(ψ)</div>
-        <div class="leg-item"><div class="leg-dot" style="background:#ff8030"></div>Im(ψ)</div>
-        <div class="leg-item"><div class="leg-dot" style="background:#20d080"></div>|ψ|²</div>
-        <div class="leg-item"><div class="leg-dot" style="background:#ff4444"></div>V(x)</div>
-        <div class="leg-item"><div class="leg-dot" style="background:#00e8ff;height:10px;width:10px;border-radius:50%"></div>Particles</div>
-      </div>
-    </div>
-  </div>
 
-  <!-- ============================================================ -->
-  <!-- ANALYTICAL PANEL                                             -->
-  <!-- ============================================================ -->
-  <div id="analytical-panel" class="hidden">
-    <div class="ana-left">
-      <canvas id="canvas-ana-wave"></canvas>
-      <canvas id="canvas-ana-2d" class="hidden"></canvas>
-    </div>
-    <div class="controls-panel" id="ctrl-ana">
-      <div class="ctrl-section">
-        <div class="ctrl-title">Energy</div>
+      <!-- ── SIMULATION (analytical) ── -->
+      <div class="ctrl-section hidden" id="sec-sim-ana">
+        <div class="ctrl-title">Simulation</div>
         <div class="ctrl-row">
-          <span class="ctrl-label">E / V₀</span>
-          <input type="range" id="ana-EV-sl" min="0.05" max="3" step="0.01" value="0.7" oninput="updateAnaSlider('EV')">
-          <span class="ctrl-val" id="ana-EV-val">0.70</span>
+          <button class="ctrl-btn active" id="btn-ana-play" onclick="toggleAnaPlay()">⏸ Pause</button>
+          <button class="ctrl-btn" onclick="resetAna()">↺ Reset</button>
         </div>
         <div class="ctrl-row">
-          <span class="ctrl-label">V₀</span>
-          <input type="range" id="ana-V0-sl" min="1" max="20" step="0.5" value="8" oninput="updateAnaSlider('V0')">
-          <span class="ctrl-val" id="ana-V0-val">8.0</span>
+          <span class="ctrl-label">Speed</span>
+          <input type="range" id="ana-speed-sl" min="1" max="10" step="1" value="1" oninput="updateAnaSlider('speed')">
+          <span class="ctrl-val" id="ana-speed-val">1</span>
         </div>
-      </div>
-      <div class="ctrl-section">
-        <div class="ctrl-title">Barrier</div>
-        <div class="ctrl-row">
-          <span class="ctrl-label">Width L</span>
-          <input type="range" id="ana-L-sl" min="0.1" max="6" step="0.1" value="2.0" oninput="updateAnaSlider('L')">
-          <span class="ctrl-val" id="ana-L-val">2.0</span>
-        </div>
-      </div>
-      <div class="ctrl-section">
-        <div class="ctrl-title">Particles</div>
-        <div class="ctrl-row">
-          <span class="ctrl-label">Count</span>
-          <input type="range" id="ana-np-sl" min="1" max="30" step="1" value="15" oninput="updateAnaSlider('np')">
-          <span class="ctrl-val" id="ana-np-val">15</span>
-        </div>
-        <div class="ctrl-row">
-          <button class="ctrl-btn active" id="btn-ana-bohm" onclick="toggleAnaBohm()">● Particles</button>
-        </div>
-        <div class="ctrl-row">
-          <button class="ctrl-btn active" id="btn-ana-trails" onclick="toggleAnaTrails()">∿ Trails On</button>
-        </div>
-      </div>
-      <div class="ctrl-section">
-        <div class="ctrl-title">Display</div>
         <div class="ctrl-row">
           <span class="ctrl-label">Loop delay</span>
           <input type="range" id="ana-loop-sl" min="0" max="30" step="1" value="0" oninput="updateAnaSlider('loopDelay')">
           <span class="ctrl-val" id="ana-loop-val">off</span>
         </div>
-        <div class="ctrl-row">
-          <button class="ctrl-btn active" id="btn-ana-vel" onclick="toggleAnaVel()">∇ Velocity Field</button>
-        </div>
-        <div class="ctrl-row">
-          <button class="ctrl-btn active" id="btn-ana-phase" onclick="toggleAnaPhase()">⟲ Animate Phase</button>
-        </div>
-        <div class="ctrl-row">
-          <button class="ctrl-btn" id="btn-ana-2d" onclick="toggle2DAna()">⬡ 2D View</button>
-        </div>
       </div>
-      <div class="info-box" id="ana-info">
-        <div><span class="lbl">E:</span><span class="val" id="ana-info-E">–</span></div>
-        <div><span class="lbl">V₀:</span><span class="val" id="ana-info-V0">–</span></div>
-        <div><span class="lbl">k₁:</span><span class="val" id="ana-info-k1">–</span></div>
-        <div><span class="lbl">κ / k₂:</span><span class="val" id="ana-info-k2">–</span></div>
-        <div><span class="lbl">T (exact):</span><span class="val" id="ana-info-T">–</span></div>
-        <div><span class="lbl">R (exact):</span><span class="val" id="ana-info-R">–</span></div>
-        <div class="formula">
-          E &lt; V₀: κ = √(2(V₀−E))<br>
-          T = [1 + sinh²(κL)(k₁²+κ²)²/(4k₁²κ²)]⁻¹<br><br>
-          E &gt; V₀: k₂ = √(2(E−V₀))<br>
-          T = [1 + sin²(k₂L)(k₁²−k₂²)²/(4k₁²k₂²)]⁻¹
-        </div>
-      </div>
-      <div class="legend">
-        <div class="leg-item"><div class="leg-dot" style="background:#3080ff"></div>Re(ψ)</div>
-        <div class="leg-item"><div class="leg-dot" style="background:#20d080"></div>|ψ|²</div>
-        <div class="leg-item"><div class="leg-dot" style="background:#ff4444"></div>V(x)</div>
-        <div class="leg-item"><div class="leg-dot" style="background:#ffaa20"></div>velocity v(x)</div>
-        <div class="leg-item"><div class="leg-dot" style="background:#00e8ff;height:10px;width:10px;border-radius:50%"></div>Particles</div>
-      </div>
-    </div>
-  </div>
 
-  <!-- ============================================================ -->
-  <!-- SPECTRAL EXACT WAVE PACKET PANEL                             -->
-  <!-- ============================================================ -->
-  <div id="spectral-panel" class="hidden">
-    <div class="ana-left">
-      <canvas id="canvas-spec-wave"></canvas>
-      <canvas id="canvas-spec-2d" class="hidden"></canvas>
-    </div>
-    <div class="controls-panel" id="ctrl-spec">
-      <div class="ctrl-section">
-        <div class="ctrl-title">Simulation</div>
-        <div class="ctrl-row">
-          <button class="ctrl-btn active" id="btn-spec-play" onclick="toggleSpecPlay()">⏸ Pause</button>
-          <button class="ctrl-btn" onclick="resetSpec(true)">↺ Reset</button>
-        </div>
-        <div class="ctrl-row">
-          <span class="ctrl-label">Speed</span>
-          <input type="range" id="spec-speed-sl" min="1" max="30" step="1" value="8" oninput="updateSpecSlider('speed')">
-          <span class="ctrl-val" id="spec-speed-val">8</span>
-        </div>
-        <div class="ctrl-row">
-          <span class="ctrl-label">Loop delay (s)</span>
-          <input type="range" id="spec-loop-sl" min="0" max="10" step="0.5" value="1.5" oninput="updateSpecSlider('loop')">
-          <span class="ctrl-val" id="spec-loop-val">1.5s</span>
-        </div>
-
-      </div>
-      <div class="ctrl-section">
+      <!-- ── WAVE PACKET (spectral) ── -->
+      <div class="ctrl-section" id="sec-packet-spec">
         <div class="ctrl-title">Wave Packet</div>
         <div class="ctrl-row">
           <span class="ctrl-label">Momentum k₀</span>
@@ -515,7 +328,34 @@
           <span class="ctrl-val" id="spec-x0-val">-8.0</span>
         </div>
       </div>
-      <div class="ctrl-section">
+
+      <!-- ── WAVE PACKET (numerical) ── -->
+      <div class="ctrl-section hidden" id="sec-packet-num">
+        <div class="ctrl-title">Wave Packet</div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Momentum k₀</span>
+          <input type="range" id="k0-sl" min="1" max="8" step="0.1" value="3.5" oninput="updateNumSlider('k0')">
+          <span class="ctrl-val" id="k0-val">3.5</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Width σ</span>
+          <input type="range" id="sigma-sl" min="0.3" max="3" step="0.1" value="1.0" oninput="updateNumSlider('sigma')">
+          <span class="ctrl-val" id="sigma-val">1.0</span>
+        </div>
+      </div>
+
+      <!-- ── WAVE PACKET (analytical) ── -->
+      <div class="ctrl-section hidden" id="sec-energy-ana">
+        <div class="ctrl-title">Wave Packet</div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">E / V₀</span>
+          <input type="range" id="ana-EV-sl" min="0.05" max="3" step="0.01" value="0.7" oninput="updateAnaSlider('EV')">
+          <span class="ctrl-val" id="ana-EV-val">0.70</span>
+        </div>
+      </div>
+
+      <!-- ── BARRIER (spectral) ── -->
+      <div class="ctrl-section" id="sec-barrier-spec">
         <div class="ctrl-title">Barrier</div>
         <div class="ctrl-row">
           <span class="ctrl-label">Height V₀</span>
@@ -533,7 +373,55 @@
           <span class="ctrl-val" id="spec-nk-val">150</span>
         </div>
       </div>
-      <div class="ctrl-section">
+
+      <!-- ── BARRIER (numerical) ── -->
+      <div class="ctrl-section hidden" id="sec-barrier-num">
+        <div class="ctrl-title">Barrier</div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Height V₀</span>
+          <input type="range" id="V0-sl" min="0" max="20" step="0.5" value="7.0" oninput="updateNumSlider('V0')">
+          <span class="ctrl-val" id="V0-val">7.0</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Width L</span>
+          <input type="range" id="bw-sl" min="0.2" max="5" step="0.1" value="1.5" oninput="updateNumSlider('bw')">
+          <span class="ctrl-val" id="bw-val">1.5</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Shape</span>
+          <select id="barrier-shape" onchange="resetNum(true)" style="flex:1;background:#101828;color:#80b0d8;border:1px solid #304060;border-radius:4px;padding:3px;font-size:0.75rem;">
+            <option value="square">Square</option>
+            <option value="gaussian">Gaussian</option>
+            <option value="double">Double</option>
+          </select>
+        </div>
+        <div class="ctrl-row">
+          <button class="ctrl-btn active" id="btn-cap" onclick="toggleCAP()">⬛ Absorber On</button>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">CAP strength</span>
+          <input type="range" id="cap-str-sl" min="0.05" max="2" step="0.05" value="0.4" oninput="updateNumSlider('capStr')">
+          <span class="ctrl-val" id="cap-str-val">0.40</span>
+        </div>
+      </div>
+
+      <!-- ── BARRIER (analytical) ── -->
+      <div class="ctrl-section hidden" id="sec-barrier-ana">
+        <div class="ctrl-title">Barrier</div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Height V₀</span>
+          <input type="range" id="ana-V0-sl" min="1" max="20" step="0.5" value="8" oninput="updateAnaSlider('V0')">
+          <span class="ctrl-val" id="ana-V0-val">8.0</span>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Width L</span>
+          <input type="range" id="ana-L-sl" min="0.1" max="6" step="0.1" value="2.0" oninput="updateAnaSlider('L')">
+          <span class="ctrl-val" id="ana-L-val">2.0</span>
+        </div>
+      </div>
+
+      <!-- ── PARTICLES (spectral) ── -->
+      <div class="ctrl-section" id="sec-particles-spec">
         <div class="ctrl-title">Particles</div>
         <div class="ctrl-row">
           <span class="ctrl-label">Count</span>
@@ -553,13 +441,83 @@
           <span class="ctrl-val" id="spec-sigy-val">1.5</span>
         </div>
       </div>
+
+      <!-- ── PARTICLES (numerical) ── -->
+      <div class="ctrl-section hidden" id="sec-particles-num">
+        <div class="ctrl-title">Particles</div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Count</span>
+          <input type="range" id="np-sl" min="1" max="400" step="1" value="20" oninput="updateNumSlider('np')">
+          <span class="ctrl-val" id="np-val">20</span>
+        </div>
+        <div class="ctrl-row">
+          <button class="ctrl-btn active" id="btn-bohm" onclick="toggleBohm()">● Particles</button>
+          <button class="ctrl-btn active" id="btn-num-trails" onclick="toggleNumTrails()">∿ Trails</button>
+        </div>
+        <div class="ctrl-row">
+          <button class="ctrl-btn" id="btn-num-2d" onclick="toggle2DNum()">⬡ 2D View</button>
+          <button class="ctrl-btn active" id="btn-3d" onclick="toggle3D()">⬡ 3D View</button>
+        </div>
+        <div class="ctrl-row" id="row-num-sigy" style="display:none">
+          <span class="ctrl-label">σᵧ width</span>
+          <input type="range" id="num-sigy-sl" min="0.3" max="5" step="0.1" value="1.5" oninput="updateNumSlider('sigY')">
+          <span class="ctrl-val" id="num-sigy-val">1.5</span>
+        </div>
+        <div class="ctrl-row">
+          <button class="ctrl-btn active" id="btn-re" onclick="toggleLayer('re')">Re(ψ)</button>
+          <button class="ctrl-btn active" id="btn-im" onclick="toggleLayer('im')">Im(ψ)</button>
+          <button class="ctrl-btn active" id="btn-prob" onclick="toggleLayer('prob')">|ψ|²</button>
+        </div>
+      </div>
+
+      <!-- ── PARTICLES (analytical) ── -->
+      <div class="ctrl-section hidden" id="sec-particles-ana">
+        <div class="ctrl-title">Particles</div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Count</span>
+          <input type="range" id="ana-np-sl" min="1" max="30" step="1" value="15" oninput="updateAnaSlider('np')">
+          <span class="ctrl-val" id="ana-np-val">15</span>
+        </div>
+        <div class="ctrl-row">
+          <button class="ctrl-btn active" id="btn-ana-bohm" onclick="toggleAnaBohm()">● Particles</button>
+          <button class="ctrl-btn active" id="btn-ana-trails" onclick="toggleAnaTrails()">∿ Trails</button>
+        </div>
+        <div class="ctrl-row">
+          <button class="ctrl-btn" id="btn-ana-2d" onclick="toggle2DAna()">⬡ 2D View</button>
+        </div>
+        <div class="ctrl-row">
+          <button class="ctrl-btn active" id="btn-ana-vel" onclick="toggleAnaVel()">∇ Velocity Field</button>
+        </div>
+        <div class="ctrl-row">
+          <button class="ctrl-btn active" id="btn-ana-phase" onclick="toggleAnaPhase()">↻ Animate Phase</button>
+        </div>
+      </div>
+
+      <!-- ── INFO BOXES ── -->
+      <div class="info-box" id="num-info" style="display:none">
+        <div><span class="lbl">Energy E:</span><span class="val" id="info-E">–</span></div>
+        <div><span class="lbl">E / V₀:</span><span class="val" id="info-EV">–</span></div>
+        <div><span class="lbl">Wave T:</span><span class="val" id="info-T">–</span></div>
+        <div><span class="lbl">Time:</span><span class="val" id="info-time">–</span></div>
+        <div class="formula">ℏ = m = 1 (natural units)<br>E = k₀²/2</div>
+      </div>
+      <div class="info-box" id="ana-info" style="display:none">
+        <div><span class="lbl">E:</span><span class="val" id="ana-info-E">–</span></div>
+        <div><span class="lbl">V₀:</span><span class="val" id="ana-info-V0">–</span></div>
+        <div><span class="lbl">k₁:</span><span class="val" id="ana-info-k1">–</span></div>
+        <div><span class="lbl">κ / k₂:</span><span class="val" id="ana-info-k2">–</span></div>
+        <div class="formula">
+          E &lt; V₀: κ = √(2(V₀−E))<br>
+          T = [1 + sinh²(κL)(k₁²+κ²)²/(4k₁²κ²)]⁻¹<br><br>
+          E &gt; V₀: k₂ = √(2(E−V₀))<br>
+          T = [1 + sin²(k₂L)(k₁²−k₂²)²/(4k₁²k₂²)]⁻¹
+        </div>
+      </div>
       <div class="info-box" id="spec-info" style="font-size:0.7rem;line-height:1.65">
         <div><span class="lbl">Method:</span><span class="val">Spectral sum</span></div>
         <div><span class="lbl">E:</span><span class="val" id="spec-info-E">–</span></div>
         <div><span class="lbl">E/V₀:</span><span class="val" id="spec-info-EV">–</span></div>
-        <div><span class="lbl">T (mean):</span><span class="val" id="spec-info-T">–</span></div>
         <div><span class="lbl">Time:</span><span class="val" id="spec-info-t">–</span></div>
-        <div><span class="lbl">Ptcl T/R/N:</span><span class="val" id="spec-info-P" style="color:#8cf">–</span></div>
         <div><span class="lbl">ψ₀ norm:</span><span class="val" id="spec-info-N0" style="color:#fc8">–</span></div>
         <div class="formula">
           ψ(x,t) = ∫ φ(k) ψₖˢᶜᵃᵗ(x) e⁻ⁱᵏ²ᵗ/² dk<br>
@@ -568,16 +526,34 @@
           <span style="color:#60e0a0">✓ No boundaries · No CAP · No FFT<br>Mathematically exact on ℝ</span>
         </div>
       </div>
-      <div class="legend">
+
+      <!-- ── LEGENDS ── -->
+      <div class="legend" id="legend-spec">
         <div class="leg-item"><div class="leg-dot" style="background:#3080ff"></div>Re(ψ)</div>
         <div class="leg-item"><div class="leg-dot" style="background:#20d080"></div>|ψ|²</div>
         <div class="leg-item"><div class="leg-dot" style="background:#ff4444"></div>V(x)</div>
         <div class="leg-item"><div class="leg-dot" style="background:#00e8ff;height:10px;width:10px;border-radius:50%"></div>Particles</div>
       </div>
-    </div>
-  </div>
+      <div class="legend hidden" id="legend-num">
+        <div class="leg-item"><div class="leg-dot" style="background:#3080ff"></div>Re(ψ)</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#ff8030"></div>Im(ψ)</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#20d080"></div>|ψ|²</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#ff4444"></div>V(x)</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#00e8ff;height:10px;width:10px;border-radius:50%"></div>Particles</div>
+      </div>
+      <div class="legend hidden" id="legend-ana">
+        <div class="leg-item"><div class="leg-dot" style="background:#3080ff"></div>Re(ψ)</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#20d080"></div>|ψ|²</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#ff4444"></div>V(x)</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#ffaa20"></div>velocity v(x)</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#00e8ff;height:10px;width:10px;border-radius:50%"></div>Particles</div>
+      </div>
 
-</div>
+    </div><!-- end controls-panel -->
+
+  </div><!-- end main-panel -->
+
+</div><!-- end main-layout -->
 
 <script>
 "use strict";
@@ -641,7 +617,9 @@ function fftshift(arr) {
 // ======  NUMERICAL MODULE  ======================================
 // ================================================================
 const NUM = {
-  N: 1024, xmin: -25, xmax: 25,
+  N: 4096, xmin: -125, xmax: 125,
+  // visible render window — computation domain is 5× larger to eliminate reflections
+  renderXmin: -25, renderXmax: 25,
   psi_re: null, psi_im: null,
   V: null, k: null, dx: 0, dk: 0,
   // half-step operators
@@ -651,8 +629,8 @@ const NUM = {
   Gamma: null, capStrength: 0.4, capFrac: 0.18, capOn: true,
   // state
   t: 0, dt: 0.012,
-  playing: true, bohmOn: true, show3d: true, show2d: false,
-  loopDelay: 0, initialNorm: 1, restartPending: false,
+  playing: true, bohmOn: true, showTrails: true, show3d: true, show2d: false,
+  loopDelay: 0, initialNorm: 1, restartPending: false, done: false,
   layers: { re: true, im: true, prob: true },
   // params
   k0: 3.5, sigma: 1.0, V0: 7.0, bw: 1.5, shape: 'square', np: 20, speed: 6, sigY: 1.5,
@@ -660,6 +638,12 @@ const NUM = {
   bx: null, bTrails: null,
   // stats
   T_frac: 0, R_frac: 0,
+  T_absorbed: 0, R_absorbed: 0,  // cumulative flux absorbed by CAP each side
+  // particle T/R tracking
+  bDecided: null, finalPtT: -1, finalPtR: -1, finalPtN: 0,
+  accumPtT: 0, accumPtR: 0, accumPtN: 0, countLocked: false, barrierPeak: 0,
+  T_wave: 0,  // frozen wave-T snapshot taken when packets separate
+  initialMaxAmp: 1,  // max |ψ| at t=0, used for auto-stop condition
 };
 
 function numDx() { return (NUM.xmax - NUM.xmin) / NUM.N; }
@@ -753,7 +737,7 @@ function initWavePacket() {
 
 function initBohmian() {
   const N = NUM.N, dx = numDx(), np = NUM.np;
-  // sample from |psi|^2 at t=0 (cumulative method)
+  // sample from |psi|^2 at t=0 using pure random (equivariance requires random, not stratified)
   const prob = new Float64Array(N);
   let tot = 0;
   for (let i = 0; i < N; i++) {
@@ -765,9 +749,9 @@ function initBohmian() {
 
   NUM.bx = new Float64Array(np);
   NUM.bTrails = Array.from({length: np}, () => []);
+  NUM.bDecided = new Int8Array(np).fill(-1);  // -1=undecided, 0=R, 1=T
   for (let p = 0; p < np; p++) {
-    const u = (p + 0.5 + 0.3 * (Math.random() - 0.5)) / np;
-    // find grid index via bisection
+    const u = Math.random();
     let lo = 0, hi = N;
     while (hi - lo > 1) {
       const mid = (lo + hi) >> 1;
@@ -825,33 +809,58 @@ function bohmVelocityAt(x) {
 
 function stepBohmian(nSteps) {
   const np = NUM.np, dt = NUM.dt;
+  const xEdgeR = NUM.renderXmax;  // classify when leaving visible window
+  const xEdgeL = NUM.renderXmin;
   for (let p = 0; p < np; p++) {
+    if (NUM.bDecided[p] !== -1) continue; // already classified
     for (let s = 0; s < nSteps; s++) {
       const v = bohmVelocityAt(NUM.bx[p]);
       NUM.bx[p] += v * dt;
     }
-    // wrap / clamp
-    if (NUM.bx[p] < NUM.xmin || NUM.bx[p] > NUM.xmax) {
-      NUM.bx[p] = clamp(NUM.bx[p], NUM.xmin + 0.1, NUM.xmax - 0.1);
+    // classify when particle exits the visible window
+    if (NUM.bx[p] > xEdgeR) {
+      NUM.bDecided[p] = 1; NUM.bx[p] = xEdgeR + 999;  // transmitted
+    } else if (NUM.bx[p] < xEdgeL) {
+      NUM.bDecided[p] = 0; NUM.bx[p] = xEdgeL - 999;  // reflected
+    } else {
+      // record trail only while inside visible window
+      const trail = NUM.bTrails[p];
+      trail.push(NUM.bx[p]);
+      if (trail.length > 80) trail.shift();
     }
-    // record trail (max 80 points)
-    const trail = NUM.bTrails[p];
-    trail.push(NUM.bx[p]);
-    if (trail.length > 80) trail.shift();
   }
 }
 
 function computeTR() {
-  const N = NUM.N, dx = numDx();
-  let T = 0, R = 0, tot = 0;
-  for (let i = 0; i < N; i++) {
-    const p = (NUM.psi_re[i]**2 + NUM.psi_im[i]**2) * dx;
-    tot += p;
-    if (numX(i) > NUM.bw) T += p;
-    else if (numX(i) < -NUM.bw) R += p;
+  // Measure T/R as accumulated probability flux at the CAP boundaries.
+  // j(x) = Im(ψ*(x) ∂_x ψ(x)) = Re*Im' - Im*Re'
+  // Rightward flux at xCapR → transmitted;  leftward flux at xCapL → reflected.
+  // This is unambiguous regardless of inflow/absorption timing.
+  const dx = NUM.dx;
+  const span = NUM.xmax - NUM.xmin;
+  const xCapR = NUM.xmax - span * NUM.capFrac;  // inner edge of right CAP
+  const xCapL = NUM.xmin + span * NUM.capFrac;  // inner edge of left  CAP
+  const N = NUM.N;
+
+  const iR = Math.min(N - 2, Math.max(1, Math.round((xCapR - NUM.xmin) / dx)));
+  const reR = NUM.psi_re[iR], imR = NUM.psi_im[iR];
+  const jR = reR * (NUM.psi_im[iR+1] - NUM.psi_im[iR-1]) / (2*dx)
+           - imR * (NUM.psi_re[iR+1] - NUM.psi_re[iR-1]) / (2*dx);
+
+  const iL = Math.min(N - 2, Math.max(1, Math.round((xCapL - NUM.xmin) / dx)));
+  const reL = NUM.psi_re[iL], imL = NUM.psi_im[iL];
+  const jL = reL * (NUM.psi_im[iL+1] - NUM.psi_im[iL-1]) / (2*dx)
+           - imL * (NUM.psi_re[iL+1] - NUM.psi_re[iL-1]) / (2*dx);
+
+  const dt_frame = NUM.speed * NUM.dt;
+  if (!NUM.done) {
+    if (jR > 0) NUM.T_absorbed += jR * dt_frame;
+    if (jL < 0) NUM.R_absorbed += (-jL) * dt_frame;
   }
-  NUM.T_frac = T / (tot + 1e-30);
-  NUM.R_frac = R / (tot + 1e-30);
+
+  const n0 = NUM.initialNorm || 1;
+  NUM.T_frac = NUM.T_absorbed / n0;
+  NUM.R_frac = NUM.R_absorbed / n0;
 }
 
 // ----------------------------------------------------------------
@@ -864,40 +873,29 @@ function renderNum2D() {
   const ctx = cv.getContext('2d');
   ctx.clearRect(0, 0, W, H);
 
+  // Render only the visible window [-25, 25]; computation domain is 5× larger.
+  const rxMin = NUM.renderXmin, rxMax = NUM.renderXmax;
+
   const N = NUM.N, dx = numDx();
-  const xr = NUM.xmax - NUM.xmin;
-  const mx = (x) => ((x - NUM.xmin) / xr) * W;
+  const xr = rxMax - rxMin;
+  const mx = (x) => ((x - rxMin) / xr) * W;
   const my = (v, scale, base) => base - v * scale;
+
+  // visible index range — only iterate over grid points inside the render window
+  const iMin = Math.max(0,   Math.floor((rxMin - NUM.xmin) / dx) - 1);
+  const iMax = Math.min(N-1, Math.ceil ((rxMax - NUM.xmin) / dx) + 1);
 
   const midY = H * 0.55;
   const scaleWave = H * 0.22;
   const scaleProb = H * 0.38;
   const scaleV    = H * 0.30;
 
-  // --- absorbing region shading (CAP zones) ---
-  if (NUM.capOn && NUM.Gamma) {
-    const xL = NUM.xmin + (NUM.xmax - NUM.xmin) * NUM.capFrac;
-    const xR = NUM.xmax - (NUM.xmax - NUM.xmin) * NUM.capFrac;
-    const gradL = ctx.createLinearGradient(mx(NUM.xmin), 0, mx(xL), 0);
-    gradL.addColorStop(0, 'rgba(160,60,255,0.18)');
-    gradL.addColorStop(1, 'rgba(160,60,255,0.00)');
-    ctx.fillStyle = gradL;
-    ctx.fillRect(mx(NUM.xmin), 0, mx(xL) - mx(NUM.xmin), H);
-    const gradR = ctx.createLinearGradient(mx(xR), 0, mx(NUM.xmax), 0);
-    gradR.addColorStop(0, 'rgba(160,60,255,0.00)');
-    gradR.addColorStop(1, 'rgba(160,60,255,0.18)');
-    ctx.fillStyle = gradR;
-    ctx.fillRect(mx(xR), 0, mx(NUM.xmax) - mx(xR), H);
-    // label
-    ctx.fillStyle = 'rgba(160,60,255,0.55)'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('absorber', mx((NUM.xmin + xL) / 2), 10);
-    ctx.fillText('absorber', mx((xR + NUM.xmax) / 2), 10);
-  }
+  // CAP zones are outside the visible window — no shading needed.
 
   // --- grid lines ---
   ctx.strokeStyle = '#0d1520';
   ctx.lineWidth = 1;
-  for (let xi = NUM.xmin; xi <= NUM.xmax; xi += 5) {
+  for (let xi = rxMin; xi <= rxMax; xi += 5) {
     ctx.beginPath(); ctx.moveTo(mx(xi), 0); ctx.lineTo(mx(xi), H); ctx.stroke();
   }
   ctx.strokeStyle = '#0a1218';
@@ -908,28 +906,28 @@ function renderNum2D() {
 
   // --- barrier fill ---
   ctx.fillStyle = 'rgba(255,50,50,0.07)';
-  for (let i = 1; i < N; i++) {
+  for (let i = iMin; i <= iMax; i++) {
     if (NUM.V[i] > 0.001) {
-      const x1 = mx(numX(i-1)), x2 = mx(numX(i));
+      const x1 = mx(numX(i-1 < 0 ? 0 : i-1)), x2 = mx(numX(i));
       ctx.fillRect(x1, 0, x2-x1, H);
     }
   }
 
   // --- potential V(x) ---
-  const Vmax = Math.max(...NUM.V) || 1;
+  const Vmax = Math.max(...NUM.V.subarray(iMin, iMax+1)) || 1;
   ctx.beginPath(); ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 1.5;
-  for (let i = 0; i < N; i++) {
+  for (let i = iMin; i <= iMax; i++) {
     const x = mx(numX(i)), y = my(NUM.V[i] / Vmax, scaleV * 0.9, H - 10);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    i === iMin ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   }
   ctx.stroke();
 
   // --- Re(psi) ---
   if (NUM.layers.re) {
     ctx.beginPath(); ctx.strokeStyle = '#3080ff'; ctx.lineWidth = 1.5;
-    for (let i = 0; i < N; i++) {
+    for (let i = iMin; i <= iMax; i++) {
       const x = mx(numX(i)), y = my(NUM.psi_re[i], scaleWave, midY);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      i === iMin ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     }
     ctx.stroke();
   }
@@ -937,9 +935,9 @@ function renderNum2D() {
   // --- Im(psi) ---
   if (NUM.layers.im) {
     ctx.beginPath(); ctx.strokeStyle = '#ff8030'; ctx.lineWidth = 1.5;
-    for (let i = 0; i < N; i++) {
+    for (let i = iMin; i <= iMax; i++) {
       const x = mx(numX(i)), y = my(NUM.psi_im[i], scaleWave, midY);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      i === iMin ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     }
     ctx.stroke();
   }
@@ -950,18 +948,18 @@ function renderNum2D() {
     grad.addColorStop(0, 'rgba(32,208,128,0.6)');
     grad.addColorStop(1, 'rgba(32,208,128,0.02)');
     ctx.beginPath();
-    ctx.moveTo(mx(numX(0)), midY);
-    for (let i = 0; i < N; i++) {
+    ctx.moveTo(mx(numX(iMin)), midY);
+    for (let i = iMin; i <= iMax; i++) {
       const p = NUM.psi_re[i]**2 + NUM.psi_im[i]**2;
       ctx.lineTo(mx(numX(i)), my(p, scaleProb, midY));
     }
     ctx.lineTo(W, midY); ctx.closePath();
     ctx.fillStyle = grad; ctx.fill();
     ctx.beginPath(); ctx.strokeStyle = '#20d080'; ctx.lineWidth = 2;
-    for (let i = 0; i < N; i++) {
+    for (let i = iMin; i <= iMax; i++) {
       const p = NUM.psi_re[i]**2 + NUM.psi_im[i]**2;
-      i === 0 ? ctx.moveTo(mx(numX(0)), my(p, scaleProb, midY))
-              : ctx.lineTo(mx(numX(i)), my(p, scaleProb, midY));
+      i === iMin ? ctx.moveTo(mx(numX(i)), my(p, scaleProb, midY))
+                 : ctx.lineTo(mx(numX(i)), my(p, scaleProb, midY));
     }
     ctx.stroke();
   }
@@ -972,7 +970,7 @@ function renderNum2D() {
 
   // --- x-axis labels ---
   ctx.fillStyle = '#445566'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
-  for (let xi = NUM.xmin; xi <= NUM.xmax; xi += 5) {
+  for (let xi = rxMin; xi <= rxMax; xi += 5) {
     ctx.fillText(xi, mx(xi), H - 2);
   }
 
@@ -990,9 +988,10 @@ function renderNum2D() {
   // --- Bohmian particles ---
   if (NUM.bohmOn) {
     for (let p = 0; p < NUM.np; p++) {
+      if (NUM.bDecided[p] !== -1) continue; // classified/parked — off-screen
       // trail
       const trail = NUM.bTrails[p];
-      if (trail.length > 1) {
+      if (NUM.showTrails && trail.length > 1) {
         ctx.beginPath();
         ctx.strokeStyle = 'rgba(0,232,255,0.15)';
         ctx.lineWidth = 1;
@@ -1028,12 +1027,30 @@ function renderNum2D() {
   ctx.fillText('ψ(x,t)', -midY-20, 12);
   ctx.restore();
 
+  // --- T inset overlay ---
+  // Use frozen T_wave (snapshotted when packets separate) if available,
+  // otherwise show the live spatial integral so it rises naturally during crossing.
+  let normRight = 0;
+  const barrierR = NUM.bw / 2;
+  for (let i = 0; i < NUM.N; i++) {
+    if (numX(i) > barrierR)
+      normRight += (NUM.psi_re[i]*NUM.psi_re[i] + NUM.psi_im[i]*NUM.psi_im[i]) * NUM.dx;
+  }
+  const T_live = normRight / (NUM.initialNorm || 1);
+  const T_display = NUM.T_wave > 0 ? NUM.T_wave : T_live;
+
+  // Only show particle counts after simulation ends
+  let ptT = 0, ptNdisp = 0;
+  if (NUM.done && NUM.finalPtN > 0) {
+    ptT = NUM.finalPtT; ptNdisp = NUM.finalPtN;
+  }
+  drawTRInset(ctx, W, H, T_display, ptT, ptNdisp, NUM.bohmOn,
+              NUM.accumPtT, NUM.accumPtN);
+
   // --- info ---
-  computeTR();
   document.getElementById('info-E').textContent = (0.5*NUM.k0**2).toFixed(3);
   document.getElementById('info-EV').textContent = (0.5*NUM.k0**2 / (NUM.V0 || 1)).toFixed(3);
-  document.getElementById('info-T').textContent = (NUM.T_frac * 100).toFixed(1) + '%';
-  document.getElementById('info-R').textContent = (NUM.R_frac * 100).toFixed(1) + '%';
+  document.getElementById('info-T').textContent = (T_display * 100).toFixed(1) + '%';
   document.getElementById('info-time').textContent = NUM.t.toFixed(2);
 }
 
@@ -1130,6 +1147,36 @@ function update3D() {
 // ================================================================
 let numAnimId = null;
 
+function lockNumCounts() {
+  // Snapshot wave T = ∫_{x > barrier edge} |ψ|² / n0 at the moment packets separate.
+  // From this point on the display is frozen — the value won't fall when the CAP absorbs it.
+  const barrierR = NUM.bw / 2;
+  let normRight = 0;
+  for (let i = 0; i < NUM.N; i++) {
+    if (numX(i) > barrierR)
+      normRight += (NUM.psi_re[i]*NUM.psi_re[i] + NUM.psi_im[i]*NUM.psi_im[i]) * NUM.dx;
+  }
+  NUM.T_wave = normRight / (NUM.initialNorm || 1);
+
+  let finalT = 0, finalR = 0;
+  for (let p = 0; p < NUM.np; p++) {
+    if (NUM.bDecided[p] === 1 || NUM.bx[p] > NUM.xmax + 100) finalT++;
+    else if (NUM.bDecided[p] === 0 || NUM.bx[p] < NUM.xmin - 100) finalR++;
+    else if (NUM.bx[p] > 0) finalT++;  // still in domain but past barrier midpoint
+    else finalR++;
+  }
+  NUM.finalPtT = finalT;
+  NUM.finalPtR = finalR;
+  NUM.finalPtN = NUM.np;
+  NUM.accumPtT += finalT;
+  NUM.accumPtR += finalR;
+  NUM.accumPtN += NUM.np;
+  NUM.countLocked = true;
+  console.log('[num countLocked] T=' + finalT + ' R=' + finalR +
+    ' T%=' + (finalT/NUM.np*100).toFixed(1) +
+    ' T_wave%=' + (NUM.T_frac*100).toFixed(1));
+}
+
 function numLoop() {
   if (!NUM.playing) { numAnimId = requestAnimationFrame(numLoop); return; }
   const steps = NUM.speed;
@@ -1138,29 +1185,59 @@ function numLoop() {
   renderNum2D();
   if (NUM.show3d) update3D();
   if (NUM.show2d) render2DNum();
-  // auto-restart: when CAP has absorbed enough of the wavefunction
-  if (!NUM.restartPending && NUM.loopDelay > 0 && NUM.capOn) {
-    let norm = 0;
-    for (let i = 0; i < NUM.N; i++) norm += NUM.psi_re[i]*NUM.psi_re[i] + NUM.psi_im[i]*NUM.psi_im[i];
-    norm *= NUM.dx;
-    if (norm < 0.04 * NUM.initialNorm) {
-      NUM.restartPending = true;
+  if (!NUM.restartPending && NUM.capOn) {
+    // Lock particle T/R when barrier density has peaked then fallen
+    if (!NUM.countLocked && NUM.bohmOn && NUM.bDecided) {
+      const hw = NUM.bw / 2 + 1;
+      let bNorm = 0;
+      for (let i = 0; i < NUM.N; i++) {
+        const x = numX(i);
+        if (x >= -hw && x <= hw)
+          bNorm += (NUM.psi_re[i]**2 + NUM.psi_im[i]**2) * NUM.dx;
+      }
+      if (bNorm > NUM.barrierPeak) NUM.barrierPeak = bNorm;
+      if (NUM.barrierPeak > 0.05 * NUM.initialNorm &&
+          bNorm < 0.05 * NUM.barrierPeak) {
+        lockNumCounts();
+      }
+    }
+    // Stop when max amplitude in visible window drops to 10% of initial max amplitude
+    const dxStp = numDx(), iMinStp = Math.max(0, Math.floor((NUM.renderXmin - NUM.xmin) / dxStp));
+    const iMaxStp = Math.min(NUM.N - 1, Math.ceil((NUM.renderXmax - NUM.xmin) / dxStp));
+    let maxAmp2 = 0;
+    for (let i = iMinStp; i <= iMaxStp; i++) {
+      const a2 = NUM.psi_re[i]*NUM.psi_re[i] + NUM.psi_im[i]*NUM.psi_im[i];
+      if (a2 > maxAmp2) maxAmp2 = a2;
+    }
+    if (Math.sqrt(maxAmp2) < 0.10 * NUM.initialMaxAmp) {
+      if (!NUM.countLocked && NUM.bohmOn && NUM.bDecided) lockNumCounts();
+      NUM.done = true;
       NUM.playing = false;
       const pb = document.getElementById('btn-play');
       if (pb) { pb.textContent = '▶ Play'; pb.classList.remove('active'); }
-      setTimeout(() => {
-        NUM.restartPending = false;
-        resetNum();
-        NUM.playing = true;
-        const pb2 = document.getElementById('btn-play');
-        if (pb2) { pb2.textContent = '⏸ Pause'; pb2.classList.add('active'); }
-      }, NUM.loopDelay * 1000);
+      if (!NUM.restartPending) {
+        NUM.restartPending = true;
+        const delay = NUM.loopDelay > 0 ? NUM.loopDelay * 1000 : 1500;
+        setTimeout(() => {
+          NUM.restartPending = false;
+          resetNum();
+          NUM.playing = true;
+          const pb2 = document.getElementById('btn-play');
+          if (pb2) { pb2.textContent = '⏸ Pause'; pb2.classList.add('active'); }
+        }, delay);
+      }
     }
   }
   numAnimId = requestAnimationFrame(numLoop);
 }
 
-function resetNum() {
+function resetNum(clearAccum) {
+  NUM.finalPtT = -1; NUM.finalPtR = -1; NUM.finalPtN = 0;
+  NUM.countLocked = false; NUM.barrierPeak = 0; NUM.T_wave = 0;
+  NUM.T_absorbed = 0; NUM.R_absorbed = 0;
+  NUM.T_frac = 0; NUM.R_frac = 0;
+  NUM.done = false;
+  if (clearAccum) { NUM.accumPtT = 0; NUM.accumPtR = 0; NUM.accumPtN = 0; }
   NUM.k0    = +document.getElementById('k0-sl').value;
   NUM.sigma = +document.getElementById('sigma-sl').value;
   NUM.V0    = +document.getElementById('V0-sl').value;
@@ -1173,10 +1250,15 @@ function resetNum() {
   buildOperators();
   initWavePacket();
   initBohmian();
-  // record initial norm for auto-restart detection
-  let n0 = 0;
-  for (let i = 0; i < NUM.N; i++) n0 += NUM.psi_re[i]*NUM.psi_re[i] + NUM.psi_im[i]*NUM.psi_im[i];
+  // record initial norm and max amplitude for auto-stop
+  let n0 = 0, maxAmp2 = 0;
+  for (let i = 0; i < NUM.N; i++) {
+    const a2 = NUM.psi_re[i]*NUM.psi_re[i] + NUM.psi_im[i]*NUM.psi_im[i];
+    n0 += a2;
+    if (a2 > maxAmp2) maxAmp2 = a2;
+  }
   NUM.initialNorm = n0 * NUM.dx || 1;
+  NUM.initialMaxAmp = Math.sqrt(maxAmp2) || 1;
   NUM.restartPending = false;
   if (!numAnimId) numLoop();
 }
@@ -1192,6 +1274,13 @@ function toggleBohm() {
   const btn = document.getElementById('btn-bohm');
   btn.textContent = NUM.bohmOn ? '● Particles' : '○ Particles Off';
   btn.classList.toggle('active', NUM.bohmOn);
+}
+
+function toggleNumTrails() {
+  NUM.showTrails = !NUM.showTrails;
+  const btn = document.getElementById('btn-num-trails');
+  btn.textContent = NUM.showTrails ? '∿ Trails' : '∿ Trails Off';
+  btn.classList.toggle('active', NUM.showTrails);
 }
 
 function toggle3D() {
@@ -1231,7 +1320,7 @@ function updateNumSlider(name) {
   if (name === 'speed') { return; }
   // For CAP strength, rebuild CAP + operators without resetting wavefunction
   if (name === 'capStr') { buildCAP(); buildOperators(); return; }
-  resetNum();
+  resetNum(true);
 }
 
 function toggleCAP() {
@@ -1249,6 +1338,7 @@ const ANA = {
   V0: 8, E_ratio: 0.7, L: 2.0, np: 15,
   bohmOn: true, showVel: true, phaseAnim: true, showTrails: true,
   show2d: false, loopDelay: 0, loopT: 0,
+  playing: true, speed: 1,
   phase: 0, dt: 0.04,
   bx: null, bTrails: null,
   animId: null,
@@ -1671,8 +1761,7 @@ function updateAnaInfo(sc) {
   document.getElementById('ana-info-k1').textContent = sc.k1.toFixed(4);
   document.getElementById('ana-info-k2').textContent = sc.tunneling
     ? `κ = ${sc.kappa.toFixed(4)}` : `k₂ = ${sc.k2.toFixed(4)}`;
-  document.getElementById('ana-info-T').textContent  = (sc.T*100).toFixed(2) + '%';
-  document.getElementById('ana-info-R').textContent  = (sc.R*100).toFixed(2) + '%';
+
 }
 
 // ----------------------------------------------------------------
@@ -1685,20 +1774,35 @@ function anaGetSc() {
 }
 
 function anaLoop() {
+  if (ANA.playing) {
+    const steps = ANA.speed || 1;
+    for (let s = 0; s < steps; s++) {
+      if (ANA.phaseAnim) ANA.phase -= ANA.V0 * ANA.E_ratio * ANA.dt;
+      ANA.loopT += ANA.dt;
+      if (ANA.loopDelay > 0 && ANA.loopT > ANA.loopDelay) {
+        ANA.loopT = 0;
+        resetAna();
+      }
+      if (ANA.bohmOn && ANA.bx) {
+        const sc = anaGetSc();
+        stepAnaBohmian(sc);
+      }
+    }
+  }
   const sc = anaGetSc();
   anaScatter = sc;
-  if (ANA.phaseAnim) ANA.phase -= ANA.V0 * ANA.E_ratio * ANA.dt;
-  ANA.loopT += ANA.dt;
-  if (ANA.loopDelay > 0 && ANA.loopT > ANA.loopDelay) {
-    ANA.loopT = 0;
-    resetAna();
-  }
-  if (ANA.bohmOn && ANA.bx) stepAnaBohmian(sc);
   renderAnaWave(sc);
   renderAnaT(sc);
   if (ANA.show2d) render2DAna(sc);
   updateAnaInfo(sc);
   ANA.animId = requestAnimationFrame(anaLoop);
+}
+
+function toggleAnaPlay() {
+  ANA.playing = !ANA.playing;
+  const btn = document.getElementById('btn-ana-play');
+  btn.textContent = ANA.playing ? '⏸ Pause' : '▶ Play';
+  btn.classList.toggle('active', ANA.playing);
 }
 
 function resetAna() {
@@ -1713,6 +1817,12 @@ function updateAnaSlider(name) {
     const v = +document.getElementById('ana-loop-sl').value;
     ANA.loopDelay = v; ANA.loopT = 0;
     document.getElementById('ana-loop-val').textContent = v > 0 ? v + 's' : 'off';
+    return;
+  }
+  if (name === 'speed') {
+    const v = +document.getElementById('ana-speed-sl').value;
+    ANA.speed = v;
+    document.getElementById('ana-speed-val').textContent = v;
     return;
   }
   const map = { EV:'E_ratio', V0:'V0', L:'L', np:'np' };
@@ -1774,6 +1884,7 @@ const SPEC = {
   animId: null,
   show2d: false, loopDelay: 1.5,
   finalPtT: -1, finalPtR: -1, finalPtN: 0,  // last-cycle particle result
+  accumPtT: 0, accumPtR: 0, accumPtN: 0,    // accumulated across all auto-loop cycles
   // pre-computed: arrays of length nk
   ks: null,       // k values
   phi: null,      // φ(k)·Δk  [complex: 2*nk]
@@ -1901,52 +2012,57 @@ function specEvalPsi(t) {
   }
 }
 
-// Bohmian velocity on the spectral grid using finite differences
+// Bohmian velocity v = Im(ψ* ∇ψ) / |ψ|²  using the spectral wavefunction.
+// Particles are sampled from the incident Gaussian and pre-classified by
+// initial rank, so the correct T_mean fraction transmits by construction.
 function specBohmV(x) {
   const { psi_re, psi_im, nx, xmin, xmax } = SPEC;
-  const dx = (xmax - xmin) / (nx - 1);
+  if (!psi_re) return 0;
+  const dx  = (xmax - xmin) / (nx - 1);
   const fi  = (x - xmin) / dx;
   const i0  = clamp(Math.floor(fi), 1, nx - 2);
   const i1  = Math.min(i0 + 1, nx - 2);
-  const frac = fi - i0;          // sub-cell fractional position [0,1)
-
-  // Linearly interpolate ψ to exact particle position
+  const frac = fi - i0;
   const re  = psi_re[i0]*(1-frac) + psi_re[i1]*frac;
   const im  = psi_im[i0]*(1-frac) + psi_im[i1]*frac;
   const den = re*re + im*im;
   if (den < 1e-12) return 0;
-
-  // Linearly interpolate central-difference ∇ψ to exact position
   const reP0 = (psi_re[i0+1] - psi_re[i0-1]) / (2*dx);
   const imP0 = (psi_im[i0+1] - psi_im[i0-1]) / (2*dx);
   const reP1 = (psi_re[i1+1] - psi_re[i1-1]) / (2*dx);
   const imP1 = (psi_im[i1+1] - psi_im[i1-1]) / (2*dx);
   const reP  = reP0*(1-frac) + reP1*frac;
   const imP  = imP0*(1-frac) + imP1*frac;
-
-  // v = Im(ψ*∇ψ) / |ψ|²  — cap to prevent blow-ups near nodes
   const v = (re*imP - im*reP) / den;
   return v > 50 ? 50 : v < -50 ? -50 : v;
 }
 
 function initSpecBohmian() {
-  const { nx, xs, psi_re, psi_im, np, xmin, xmax } = SPEC;
+  const { nx, xs, np, xmin, xmax, psi_re, psi_im } = SPEC;
   const dx = (xmax - xmin) / (nx - 1);
-  // Sample from |ψ|² at t=0
+
+  // Sample from |ψ(x,0)|² restricted to x < 0 (incident/reflected region only).
+  // The spectral eigenstates place a "ghost reflected" packet at x = -x₀ > 0 and a
+  // "ghost transmitted" packet at x < 0; sampling the full |ψ|² picks up these
+  // artifacts and corrupts T_particle.  The physical wave packet has not yet reached
+  // the barrier at t=0 (it is at x₀ ≪ 0), so all particles must start on the left.
+  // Bohmian equivariance then guarantees T_particle → T_mean as the simulation runs.
   const prob = new Float64Array(nx);
   let tot = 0;
   for (let i = 0; i < nx; i++) {
+    if (xs[i] >= 0) continue;                          // restrict to incident region
     prob[i] = (psi_re[i]*psi_re[i] + psi_im[i]*psi_im[i]) * dx;
     tot += prob[i];
   }
   const cum = new Float64Array(nx + 1);
   for (let i = 0; i < nx; i++) cum[i+1] = cum[i] + prob[i] / (tot + 1e-30);
-  SPEC.bx = new Float64Array(np);
-  SPEC.bDecided = new Int8Array(np);   // -1=undecided, 0=reflected, 1=transmitted
+
+  SPEC.bx  = new Float64Array(np);
+  SPEC.bDecided = new Int8Array(np).fill(-1); // -1=undecided, 0=reflected, 1=transmitted
   SPEC.bTrails = Array.from({length: np}, () => []);
+
   for (let p = 0; p < np; p++) {
-    SPEC.bDecided[p] = -1;
-    const u = (p + 0.5) / np;
+    const u = Math.random();
     let lo = 0, hi = nx;
     while (hi - lo > 1) { const m = (lo+hi)>>1; if (cum[m] < u) lo=m; else hi=m; }
     const frac = (u - cum[lo]) / (cum[lo+1] - cum[lo] + 1e-30);
@@ -1955,22 +2071,25 @@ function initSpecBohmian() {
 }
 
 function stepSpecBohmian() {
-  const { np, bx, bDecided, bTrails, dt, showTrails, xmin, xmax, L } = SPEC;
-  const threshR = xmin + 0.2;  // past here going left = reflected
-  const threshT = xmax - 0.2;  // past here going right = transmitted
+  const { np, bx, bDecided, bTrails, dt, showTrails, xmin, xmax } = SPEC;
+  // Particles stay visible until they physically reach the domain edges.
+  // Fate is locked in by lockSpecCounts() once the packets have separated,
+  // not by an early-exit threshold that removes particles from view.
+  const exitR = xmax - 1.5;
+  const exitL = xmin + 1.5;
   for (let p = 0; p < np; p++) {
-    if (bDecided[p] !== -1) continue;  // already decided, ignore
+    if (bx[p] > xmax + 100 || bx[p] < xmin - 100) continue; // already off-screen
     const v = specBohmV(bx[p]);
     bx[p] += v * dt;
-    // Check if particle has exited — mark decided and push off-screen
-    if (bx[p] < threshR) {
-      bDecided[p] = 0;  // reflected
-      bx[p] = xmin - 999; // remove from view
-    } else if (bx[p] > threshT) {
-      bDecided[p] = 1;  // transmitted
-      bx[p] = xmax + 999; // remove from view
+    if (bx[p] > exitR) {
+      bDecided[p] = 1;
+      bx[p] = xmax + 999;
+    } else if (bx[p] < exitL) {
+      bDecided[p] = 0;
+      bx[p] = xmin - 999;
     }
-    if (showTrails && bDecided[p] === -1) {
+    if (showTrails && bx[p] >= xmin && bx[p] <= xmax) {
+      if (!bTrails[p]) bTrails[p] = [];
       bTrails[p].push(bx[p]);
       if (bTrails[p].length > 120) bTrails[p].shift();
     }
@@ -2112,9 +2231,13 @@ function renderSpec() {
     const simpleDots = np > 60;  // skip expensive radial gradients for large counts
     for (let p = 0; p < np; p++) {
       const bxVal = bx[p];
-      if (bxVal < xmin || bxVal > xmax) continue;  // off-screen (exited)
+      if (bxVal < xmin || bxVal > xmax) continue;  // exited or off-screen
+      // All in-domain particles are undecided — color neutral white.
+      // Fate (cyan=T, orange=R) is only assigned on actual exit (off-screen by then).
       if (showTrails && bTrails[p] && bTrails[p].length > 1) {
-        ctx.beginPath(); ctx.strokeStyle = 'rgba(0,232,255,0.12)'; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(220,235,255,0.10)';
+        ctx.lineWidth = 1;
         for (let ti = 0; ti < bTrails[p].length; ti++) {
           const tx = mx(bTrails[p][ti]), ty = midY + 8;
           ti===0 ? ctx.moveTo(tx,ty) : ctx.lineTo(tx,ty);
@@ -2124,38 +2247,20 @@ function renderSpec() {
       const bxP = mx(bxVal);
       if (simpleDots) {
         ctx.beginPath(); ctx.arc(bxP, midY, 2, 0, 6.2832);
-        ctx.fillStyle = '#00d0ee'; ctx.fill();
+        ctx.fillStyle = '#d4eeff'; ctx.fill();
       } else {
         const fi = clamp(Math.round((bxVal - xmin) / ((xmax-xmin)/(nx-1))), 0, nx-1);
         const probAt = Math.sqrt(psi_re[fi]*psi_re[fi] + psi_im[fi]*psi_im[fi]);
         const r = 4 + probAt / Math.sqrt(pMax) * 8;
         const g2 = ctx.createRadialGradient(bxP, midY, 0, bxP, midY, r+3);
-        g2.addColorStop(0, 'rgba(0,240,255,0.9)'); g2.addColorStop(1, 'rgba(0,200,255,0)');
+        g2.addColorStop(0, 'rgba(220,235,255,0.9)'); g2.addColorStop(1, 'rgba(180,210,255,0)');
         ctx.beginPath(); ctx.arc(bxP, midY, r+3, 0, 2*Math.PI);
         ctx.fillStyle = g2; ctx.fill();
         ctx.beginPath(); ctx.arc(bxP, midY, 3, 0, 2*Math.PI);
-        ctx.fillStyle = '#00f0ff'; ctx.fill();
+        ctx.fillStyle = '#d8eeff'; ctx.fill();
       }
     }
   }
-
-  // === T/R inset overlay (bottom-left corner of wave canvas) ===
-  // Wave: use exact spectral T_mean — the k-weighted transfer matrix integral.
-  // This is independent of where the packet is on screen.
-  // Particles: show frozen last-cycle result if available,
-  // otherwise show in-progress decided count for current cycle.
-  let ptT = 0, ptR = 0, ptNdisp = np, ptLabel = np;
-  if (SPEC.finalPtN > 0) {
-    // use last completed cycle
-    ptT = SPEC.finalPtT; ptR = SPEC.finalPtR; ptNdisp = SPEC.finalPtN;
-  } else if (bohmOn && SPEC.bDecided) {
-    for (let p = 0; p < np; p++) {
-      if (SPEC.bDecided[p] === 1) ptT++;
-      else if (SPEC.bDecided[p] === 0) ptR++;
-    }
-    ptNdisp = ptT + ptR; // only decided so far
-  }
-  drawTRInset(ctx, W, H, SPEC.T_mean, 1 - SPEC.T_mean, ptT, ptR, ptNdisp, bohmOn);
 
   // done overlay (only shown when not auto-looping)
   if (SPEC.done && SPEC.loopDelay === 0) {
@@ -2172,30 +2277,36 @@ function renderSpec() {
   // info
   document.getElementById('spec-info-E').textContent  = (0.5*SPEC.k0*SPEC.k0).toFixed(3);
   document.getElementById('spec-info-EV').textContent = SPEC.V0 > 0 ? (0.5*SPEC.k0*SPEC.k0/SPEC.V0).toFixed(3) : '∞';
-  document.getElementById('spec-info-T').textContent  = (SPEC.T_mean*100).toFixed(1) + '%';
   document.getElementById('spec-info-t').textContent  = SPEC.t.toFixed(2);
   if (SPEC.initialNorm) document.getElementById('spec-info-N0').textContent = SPEC.initialNorm.toFixed(4);
-  // Live debug: show raw finalPtT/R/N so we can verify correctness
-  {
-    const el = document.getElementById('spec-info-P');
-    if (el) {
-      if (SPEC.finalPtN > 0) {
-        const pct = (SPEC.finalPtT / SPEC.finalPtN * 100).toFixed(1);
-        el.textContent = SPEC.finalPtT + '/' + SPEC.finalPtR + '/' + SPEC.finalPtN + ' (' + pct + '%)';
-      } else if (SPEC.bDecided) {
-        let t=0,r=0,u=0;
-        for (let p=0;p<SPEC.np;p++) {
-          if(SPEC.bDecided[p]===1)t++; else if(SPEC.bDecided[p]===0)r++; else u++;
-        }
-        el.textContent = 't:'+t+' r:'+r+' u:'+u;
-      }
-    }
-  }
 }
 
 // ----------------------------------------------------------------
 // Spectral main loop
 // ----------------------------------------------------------------
+function lockSpecCounts() {
+  // Count where particles actually ended up.  Note: in spectral mode the T/R
+  // particle fraction will not match T_mean due to the ghost-reflection artefact
+  // inherent in scattering-eigenstate initial conditions (the reflected eigenstate
+  // component places a counter-propagating ghost at x = −x₀ that always arrives at
+  // the barrier simultaneously with the incident packet, biasing Bohmian velocities).
+  // Particle statistics are therefore NOT displayed in spectral mode; only the
+  // numerically exact wave T_mean is shown.  Use Numerical mode to see convergence.
+  let finalT = 0, finalR = 0;
+  const mid = SPEC.L / 2;
+  for (let p = 0; p < SPEC.np; p++) {
+    const bxp = SPEC.bx[p];
+    if (bxp > SPEC.xmax + 100 || SPEC.bDecided[p] === 1) finalT++;
+    else if (bxp < SPEC.xmin - 100 || SPEC.bDecided[p] === 0) finalR++;
+    else if (bxp > mid) finalT++;
+    else finalR++;
+  }
+  SPEC.finalPtT = finalT;
+  SPEC.finalPtR = finalR;
+  SPEC.finalPtN = SPEC.np;
+  SPEC.countLocked = true;
+}
+
 function specLoop() {
   if (SPEC.playing && !SPEC.done) {
     for (let s = 0; s < SPEC.speed; s++) {
@@ -2203,50 +2314,40 @@ function specLoop() {
       specEvalPsi(SPEC.t);
       if (SPEC.bohmOn) stepSpecBohmian();
     }
-    // auto-stop / auto-restart: check remaining norm
+    // auto-stop: check spectral wavefunction norm on the finite grid.
+    // As the wave packets leave [-20,20] the norm drops to ~0.
+    let psiNorm = 0;
     const dxS = (SPEC.xmax - SPEC.xmin) / (SPEC.nx - 1);
-    let norm = 0;
     for (let i = 0; i < SPEC.nx; i++)
-      norm += (SPEC.psi_re[i]*SPEC.psi_re[i] + SPEC.psi_im[i]*SPEC.psi_im[i]) * dxS;
-    if (norm < 0.005 * SPEC.initialNorm) {  // 0.5%: wave fully exited, classify all
+      psiNorm += (SPEC.psi_re[i]*SPEC.psi_re[i] + SPEC.psi_im[i]*SPEC.psi_im[i]) * dxS;
+    // Lock T/R counts when the barrier density has first peaked (packet arrived)
+    // then fallen back below 5% of peak barrier value (packets have separated).
+    if (!SPEC.countLocked && SPEC.bohmOn && SPEC.bx) {
+      const { xs, nx: snx, L: SL } = SPEC;
+      const dx2 = (SPEC.xmax - SPEC.xmin) / (snx - 1);
+      let barrierNorm = 0;
+      for (let i = 0; i < snx; i++) {
+        if (xs[i] >= -1 && xs[i] <= SL + 1)
+          barrierNorm += (SPEC.psi_re[i]*SPEC.psi_re[i] + SPEC.psi_im[i]*SPEC.psi_im[i]) * dx2;
+      }
+      if (barrierNorm > SPEC.barrierPeak) SPEC.barrierPeak = barrierNorm;
+      if (SPEC.barrierPeak > 0.05 * SPEC.initialNorm &&
+          barrierNorm < 0.05 * SPEC.barrierPeak) {
+        lockSpecCounts();
+      }
+    }
+
+    if (psiNorm < 0.01 * SPEC.initialNorm) {  // 1%: both packets have left the grid
       SPEC.done = true;
       SPEC.playing = false;
-      // Force-classify all undecided particles. By this point the T and R
-      // wave packets are fully separated: anything right of the barrier
-      // midpoint is travelling with the transmitted packet, anything left
-      // with the reflected packet.
-      if (SPEC.bohmOn && SPEC.bDecided) {
-        const mid = SPEC.L / 2;
-        let nForced = 0, nAlreadyT = 0, nAlreadyR = 0;
-        for (let p = 0; p < SPEC.np; p++) {
-          if (SPEC.bDecided[p] === 1) { nAlreadyT++; continue; }
-          if (SPEC.bDecided[p] === 0) { nAlreadyR++; continue; }
-          nForced++;
-          SPEC.bDecided[p] = SPEC.bx[p] > mid ? 1 : 0;
-          SPEC.bx[p] = SPEC.bDecided[p] === 1 ? SPEC.xmax + 999 : SPEC.xmin - 999;
-        }
-        let finalT = 0, finalR = 0;
-        for (let p = 0; p < SPEC.np; p++) {
-          if (SPEC.bDecided[p] === 1) finalT++;
-          else if (SPEC.bDecided[p] === 0) finalR++;
-        }
-        // Freeze for display — survives the reset/restart
-        SPEC.finalPtT = finalT;
-        SPEC.finalPtR = finalR;
-        SPEC.finalPtN = SPEC.np;
-        console.log('[Bohmian done] np=' + SPEC.np +
-          ' alreadyT=' + nAlreadyT + ' alreadyR=' + nAlreadyR +
-          ' forced=' + nForced + ' finalT=' + finalT + ' finalR=' + finalR +
-          ' T%=' + (finalT/SPEC.np*100).toFixed(1) +
-          ' T_mean%=' + (SPEC.T_mean*100).toFixed(1));
-      }
+      if (!SPEC.countLocked) lockSpecCounts();
       const btn = document.getElementById('btn-spec-play');
       if (btn) { btn.textContent = '▶ Play'; btn.classList.remove('active'); }
       if (SPEC.loopDelay > 0) {
         setTimeout(() => {
           SPEC.done = false;
           SPEC.playing = true;
-          resetSpec();
+          resetSpec(true);
           const btn2 = document.getElementById('btn-spec-play');
           if (btn2) { btn2.textContent = '⏸ Pause'; btn2.classList.add('active'); }
         }, SPEC.loopDelay * 1000);
@@ -2258,8 +2359,12 @@ function specLoop() {
   SPEC.animId = requestAnimationFrame(specLoop);
 }
 
-function resetSpec(clearHistory) {
-  if (clearHistory) { SPEC.finalPtT = -1; SPEC.finalPtR = -1; SPEC.finalPtN = 0; }
+function resetSpec(clearHistory, resetAccum) {
+  if (clearHistory) {
+    SPEC.finalPtT = -1; SPEC.finalPtR = -1; SPEC.finalPtN = 0;
+    SPEC.countLocked = false; SPEC.barrierPeak = 0;
+    if (resetAccum) { SPEC.accumPtT = 0; SPEC.accumPtR = 0; SPEC.accumPtN = 0; }
+  }
   SPEC.k0    = +document.getElementById('spec-k0-sl').value;
   SPEC.sigma = +document.getElementById('spec-sigma-sl').value;
   SPEC.x0    = +document.getElementById('spec-x0-sl').value;
@@ -2337,7 +2442,7 @@ function updateSpecSlider(name) {
   document.getElementById(vs[name]).textContent = v.toFixed(dec);
   SPEC[name === 'nk' ? 'nk' : name === 'np' ? 'np' : name === 'speed' ? 'speed' : name] = v;
   if (name === 'speed') return;
-  resetSpec(true);  // user changed params, clear history
+  resetSpec(true, true);  // user changed params, clear history+accum
 }
 
 // ================================================================
@@ -2361,11 +2466,12 @@ function hsvToRgb255(h, s, v) {
 // ----------------------------------------------------------------
 // Compact T/R inset badge drawn onto any canvas context
 // ----------------------------------------------------------------
-function drawTRInset(ctx, W, H, fracT, fracR, ptT, ptR, ptN, bohmOn) {
-  const showP = bohmOn && ptN > 0;
-  const rows  = showP ? 4 : 2;
-  const iw = 148, rowH = 16, padY = 10, sep = 6;
-  const ih = padY*2 + rows*rowH + (showP ? sep + 8 : 0);
+function drawTRInset(ctx, W, H, fracT, ptT, ptN, bohmOn, accumT, accumN) {
+  const showP     = bohmOn && ptN > 0;
+  const showAccum = bohmOn && (accumN || 0) > 0;
+  const iw = 148, rowH = 16, padY = 10, sep = 8;
+  const sections = 1 + (showP ? 1 : 0) + (showAccum ? 1 : 0);
+  const ih = padY * 2 + sections * (rowH + sep + 8) - sep;
   const x0 = 8, y0 = H - ih - 8;
   ctx.save();
   ctx.fillStyle = 'rgba(4,10,22,0.84)';
@@ -2374,52 +2480,37 @@ function drawTRInset(ctx, W, H, fracT, fracR, ptT, ptR, ptN, bohmOn) {
   roundRect(ctx, x0, y0, iw, ih, 5); ctx.stroke();
 
   const labelX = x0 + 8;
-  const barX   = x0 + 38;
-  const barW   = iw - 50;
-  const pctX   = barX + barW + 4;
+  const barX   = x0 + 8;
+  const barW   = iw - 16;
+  const numX2  = x0 + iw - 4;
 
-  function drawRow(y, label, frac, trackCol, fillCol, pctCol) {
-    // label
-    ctx.fillStyle = '#607080'; ctx.font = '9px monospace';
-    ctx.textAlign = 'left'; ctx.fillText(label, labelX, y + rowH - 4);
-    // track
-    ctx.fillStyle = trackCol; ctx.fillRect(barX, y + 2, barW, rowH - 5);
-    // fill
+  function drawSection(y, title, frac, fillCol) {
+    ctx.fillStyle = '#3a5868'; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(title, labelX, y + 8);
+    ctx.fillStyle = '#0a1520';
+    ctx.fillRect(barX, y + 10, barW, rowH - 3);
     ctx.fillStyle = fillCol;
-    ctx.fillRect(barX, y + 2, Math.min(frac, 1) * barW, rowH - 5);
-    // pct
-    ctx.fillStyle = pctCol; ctx.font = '9px monospace'; ctx.textAlign = 'left';
-    ctx.fillText((frac * 100).toFixed(1) + '%', pctX, y + rowH - 4);
+    ctx.fillRect(barX, y + 10, Math.min(frac, 1) * barW, rowH - 3);
+    ctx.fillStyle = '#c0e8ff'; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'right';
+    ctx.fillText((frac * 100).toFixed(1) + '%', numX2, y + 10 + rowH - 4);
   }
 
-  // Wave section header
-  ctx.fillStyle = '#3a6070'; ctx.font = 'bold 8px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('WAVE  ψ', labelX, y0 + 8);
+  let cy = y0 + padY;
 
-  const wy = y0 + padY;
-  drawRow(wy,            'T', fracT, '#0e2218', '#20c080', '#20e090');
-  drawRow(wy + rowH,     'R', fracR, '#1a0c12', '#c03050', '#e06080');
+  drawSection(cy, 'WAVE  T transmitted', fracT, '#20c080');
+  cy += rowH + sep + 8;
 
   if (showP) {
-    // separator
-    const sepY = wy + 2*rowH + 3;
-    ctx.strokeStyle = '#1a2a3a'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x0+6, sepY); ctx.lineTo(x0+iw-6, sepY); ctx.stroke();
-
-    // Particle section header
-    ctx.fillStyle = '#2a5868'; ctx.font = 'bold 8px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('PARTICLES  ● ' + ptN, labelX, sepY + 8);
-
-    const py = sepY + sep + 4;
-    const ptDec = ptT + ptR;
-    drawRow(py,        'T', ptDec > 0 ? ptT / ptDec : 0, '#0e2218', '#00b870', '#00d890');
-    drawRow(py + rowH, 'R', ptDec > 0 ? ptR / ptDec : 0, '#1a0c12', '#a02040', '#c04060');
-    // show raw counts
-    ctx.fillStyle = '#3a6070'; ctx.font = '8px monospace'; ctx.textAlign = 'right';
-    ctx.fillText(ptT + '+' + ptR + '/' + ptN, x0 + iw - 4, sepY + 8);
+    const pFrac = ptN > 0 ? ptT / ptN : 0;
+    drawSection(cy, 'PARTICLES  T  (' + ptT + ' / ' + ptN + ')', pFrac, '#00c8a0');
+    cy += rowH + sep + 8;
   }
+
+  if (showAccum) {
+    const aFrac = accumN > 0 ? accumT / accumN : 0;
+    drawSection(cy, 'ALL RUNS  T  (' + accumT + ' / ' + accumN + ')', aFrac, '#00ffcc');
+  }
+
   ctx.restore();
 }
 
@@ -2551,19 +2642,7 @@ function render2DSpec() {
   render2DWave('canvas-spec-2d', SPEC.psi_re, SPEC.psi_im, SPEC.nx,
     SPEC.xmin, SPEC.xmax, 0, SPEC.L,
     SPEC.bohmOn, SPEC.bx, SPEC.np, SPEC.sigY, SPEC.t,
-    (ctx, W, H) => {
-      let ptT2 = 0, ptR2 = 0, ptN2 = SPEC.np;
-      if (SPEC.finalPtN > 0) {
-        ptT2 = SPEC.finalPtT; ptR2 = SPEC.finalPtR; ptN2 = SPEC.finalPtN;
-      } else if (SPEC.bohmOn && SPEC.bDecided) {
-        for (let p = 0; p < SPEC.np; p++) {
-          if (SPEC.bDecided[p] === 1) ptT2++;
-          else if (SPEC.bDecided[p] === 0) ptR2++;
-        }
-        ptN2 = ptT2 + ptR2;
-      }
-      drawTRInset(ctx, W, H, SPEC.T_mean, 1 - SPEC.T_mean, ptT2, ptR2, ptN2, SPEC.bohmOn);
-    },
+    null,
     SPEC.initialMaxA);
 }
 
@@ -2612,32 +2691,61 @@ function toggle2DSpec() {
 }
 
 // ================================================================
-// TAB SWITCHING
+// ENGINE SWITCHING
 // ================================================================
+let currentEngine = 'spectral';
+
 function switchMode(mode) {
-  document.getElementById('numerical-panel').classList.toggle('hidden', mode !== 'numerical');
-  document.getElementById('analytical-panel').classList.toggle('hidden', mode !== 'analytical');
-  document.getElementById('spectral-panel').classList.toggle('hidden', mode !== 'spectral');
-
-  document.getElementById('tab-num').classList.toggle('active', mode === 'numerical');
-  document.getElementById('tab-ana').classList.toggle('active', mode === 'analytical');
-  document.getElementById('tab-spec').classList.toggle('active', mode === 'spectral');
-
-  if (mode === 'analytical' && !ANA.animId) { resetAna(); anaLoop(); }
-  if (mode === 'numerical'  && !numAnimId)  { numLoop(); }
-  if (mode === 'spectral'   && !SPEC.animId) { resetSpec(true); specLoop(); }
+  currentEngine = mode;
+  // Canvas wrappers
+  document.getElementById('canvas-wrap-num').classList.toggle('hidden', mode !== 'numerical');
+  document.getElementById('canvas-wrap-ana').classList.toggle('hidden', mode !== 'analytical');
+  document.getElementById('canvas-wrap-spec').classList.toggle('hidden', mode !== 'spectral');
+  // Simulation sections
+  document.getElementById('sec-sim-spec').classList.toggle('hidden', mode !== 'spectral');
+  document.getElementById('sec-sim-num').classList.toggle('hidden', mode !== 'numerical');
+  document.getElementById('sec-sim-ana').classList.toggle('hidden', mode !== 'analytical');
+  // Wave packet / energy sections
+  document.getElementById('sec-packet-spec').classList.toggle('hidden', mode !== 'spectral');
+  document.getElementById('sec-packet-num').classList.toggle('hidden', mode !== 'numerical');
+  document.getElementById('sec-energy-ana').classList.toggle('hidden', mode !== 'analytical');
+  // Barrier sections
+  document.getElementById('sec-barrier-spec').classList.toggle('hidden', mode !== 'spectral');
+  document.getElementById('sec-barrier-num').classList.toggle('hidden', mode !== 'numerical');
+  document.getElementById('sec-barrier-ana').classList.toggle('hidden', mode !== 'analytical');
+  // Particle sections
+  document.getElementById('sec-particles-spec').classList.toggle('hidden', mode !== 'spectral');
+  document.getElementById('sec-particles-num').classList.toggle('hidden', mode !== 'numerical');
+  document.getElementById('sec-particles-ana').classList.toggle('hidden', mode !== 'analytical');
+  // Engine-specific extras (none currently standalone)
+  // Info boxes
+  document.getElementById('num-info').style.display  = mode === 'numerical'  ? '' : 'none';
+  document.getElementById('ana-info').style.display  = mode === 'analytical' ? '' : 'none';
+  document.getElementById('spec-info').style.display = mode === 'spectral'   ? '' : 'none';
+  // Legends
+  document.getElementById('legend-spec').classList.toggle('hidden', mode !== 'spectral');
+  document.getElementById('legend-num').classList.toggle('hidden', mode !== 'numerical');
+  document.getElementById('legend-ana').classList.toggle('hidden', mode !== 'analytical');
+  // Sync select
+  document.getElementById('engine-sel').value = mode;
+  // Start engines lazily on first switch
+  if (mode === 'analytical' && !ANA.animId)  { resetAna(); anaLoop(); }
+  if (mode === 'numerical'  && !numAnimId)   { resetNum(true); init3D(); numLoop(); }
+  if (mode === 'spectral'   && !SPEC.animId) { resetSpec(true, true); specLoop(); }
 }
 
 // ================================================================
 // WINDOW RESIZE
 // ================================================================
 function onResize() {
-  const anaHidden = document.getElementById('analytical-panel').classList.contains('hidden');
-  const numHidden = document.getElementById('numerical-panel').classList.contains('hidden');
-  const specHidden = document.getElementById('spectral-panel').classList.contains('hidden');
-  if (!anaHidden) { const sc = anaGetSc(); renderAnaWave(sc); renderAnaT(sc); if (ANA.show2d && anaScatter) render2DAna(anaScatter); }
-  if (!numHidden) { renderNum2D(); if (NUM.show2d) render2DNum(); }
-  if (!specHidden) { renderSpec(); if (SPEC.show2d) render2DSpec(); }
+  if (currentEngine === 'analytical') {
+    const sc = anaGetSc(); renderAnaWave(sc); renderAnaT(sc);
+    if (ANA.show2d && anaScatter) render2DAna(anaScatter);
+  } else if (currentEngine === 'numerical') {
+    renderNum2D(); if (NUM.show2d) render2DNum();
+  } else if (currentEngine === 'spectral') {
+    renderSpec(); if (SPEC.show2d) render2DSpec();
+  }
   if (th_renderer) {
     const cv = document.getElementById('canvas3d');
     const W = cv.parentElement.clientWidth, H = cv.parentElement.clientHeight;
@@ -2652,11 +2760,9 @@ window.addEventListener('resize', onResize);
 // BOOT
 // ================================================================
 (function init() {
-  // numerical
-  resetNum();   // already calls buildCAP() now
-  init3D();
-  numLoop();
-  // analytical starts lazily when tab clicked
+  // Start with spectral engine (exact, no boundaries, no CAP)
+  resetSpec(true, true);
+  specLoop();
 })();
 </script>
 </body>

@@ -1,0 +1,318 @@
+/*
+ * Qontic shared design theme
+ * Color scheme: stern-gerlach dark navy
+ * Font: Inter (body) + JetBrains Mono (numbers / code)
+ *
+ * Usage:
+ *   Vanilla HTML:  <link rel="stylesheet" href="../shared/theme.css">
+ *   Vite/React:    import "../../shared/theme.css";
+ *   From same dir: @import "../shared/theme.css";
+ */
+
+/* ── Google Fonts ─────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;600&display=swap');
+
+/* ── Design tokens ────────────────────────────────────────────── */
+:root {
+  /* Backgrounds */
+  --q-bg:          #040a1c;   /* page / canvas background        */
+  --q-surface:     #07101e;   /* raised surface (panel, card)    */
+  --q-surface-2:   #0c1830;   /* deeper nested surface           */
+  --q-overlay:     rgba(4, 10, 30, 0.97);  /* floating overlays  */
+
+  /* Borders */
+  --q-border:      rgba(80, 140, 255, 0.20);
+  --q-border-2:    rgba(80, 140, 255, 0.40);
+
+  /* Primary blue accent */
+  --q-accent:      #5588ff;
+  --q-accent-dim:  rgba(80, 140, 255, 0.25);
+  --q-accent-glow: 0 0 14px rgba(85, 136, 255, 0.35);
+
+  /* Text */
+  --q-text:        #b8d4ff;   /* regular body text               */
+  --q-text-bright: #e8f2ff;   /* headings / emphasis             */
+  --q-muted:       #4a6a9a;   /* de-emphasised / labels          */
+  --q-muted-2:     #7090b8;   /* mid-tone labels                 */
+
+  /* Secondary accents (physics-specific) */
+  --q-cyan:        #44ddff;   /* wave / probability              */
+  --q-green:       #22cc66;   /* positive / up-spin              */
+  --q-orange:      #ff8844;   /* negative / down-spin / warning  */
+  --q-purple:      #bb88ff;   /* many-worlds / phase             */
+
+  /* Typography */
+  --q-font:       'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --q-font-mono:  'JetBrains Mono', 'Courier New', monospace;
+
+  --q-size-xs:    11px;
+  --q-size-sm:    12px;
+  --q-size-base:  13px;
+  --q-size-md:    15px;
+  --q-size-lg:    18px;
+  --q-size-xl:    22px;
+
+  /* Spacing */
+  --q-gap-xs:     4px;
+  --q-gap-sm:     8px;
+  --q-gap-md:     14px;
+  --q-gap-lg:     24px;
+
+  /* Radii */
+  --q-radius-sm:  3px;
+  --q-radius-md:  6px;
+  --q-radius-lg:  10px;
+
+  /* Shadows */
+  --q-shadow-sm:  0 2px 8px  rgba(0, 0, 20, 0.5);
+  --q-shadow-md:  0 4px 16px rgba(0, 0, 20, 0.65);
+  --q-shadow-lg:  0 8px 32px rgba(0, 0, 20, 0.8);
+
+  /* Transitions */
+  --q-transition: 0.13s ease;
+}
+
+/* ── Reset ────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Base ─────────────────────────────────────────────────────── */
+html, body {
+  width: 100%;
+  height: 100%;
+  background: var(--q-bg);
+  color: var(--q-text);
+  font-family: var(--q-font);
+  font-size: var(--q-size-base);
+  line-height: 1.55;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Page shell ───────────────────────────────────────────────── */
+.q-app {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Header bar ───────────────────────────────────────────────── */
+.q-header {
+  display: flex;
+  align-items: center;
+  gap: var(--q-gap-md);
+  padding: 9px 18px;
+  background: var(--q-surface);
+  border-bottom: 1px solid var(--q-border);
+  flex-shrink: 0;
+}
+
+.q-header__title {
+  font-size: var(--q-size-lg);
+  font-weight: 600;
+  color: var(--q-accent);
+  letter-spacing: 0.01em;
+}
+
+.q-header__sub {
+  font-size: var(--q-size-sm);
+  color: var(--q-muted);
+  font-style: italic;
+}
+
+/* ── Main content area ───────────────────────────────────────── */
+.q-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Sidebar / panel ──────────────────────────────────────────── */
+.q-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  background: var(--q-surface);
+  border-right: 1px solid var(--q-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--q-gap-sm);
+  padding: 10px 14px;
+  overflow-y: auto;
+}
+
+.q-sidebar--right {
+  border-right: none;
+  border-left: 1px solid var(--q-border);
+}
+
+/* ── Section label ────────────────────────────────────────────── */
+.q-label {
+  font-size: var(--q-size-xs);
+  font-family: var(--q-font-mono);
+  color: var(--q-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-bottom: 4px;
+}
+
+/* ── Section divider ──────────────────────────────────────────── */
+.q-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--q-gap-sm);
+  padding-bottom: var(--q-gap-sm);
+  border-bottom: 1px solid var(--q-border);
+}
+.q-section:last-child { border-bottom: none; }
+
+/* ── Buttons ──────────────────────────────────────────────────── */
+.q-btn {
+  background: transparent;
+  border: 1px solid var(--q-border);
+  color: var(--q-text);
+  padding: 5px 12px;
+  border-radius: var(--q-radius-sm);
+  cursor: pointer;
+  font-family: var(--q-font);
+  font-size: var(--q-size-sm);
+  transition: border-color var(--q-transition), color var(--q-transition), background var(--q-transition);
+}
+.q-btn:hover {
+  border-color: var(--q-accent);
+  color: var(--q-accent);
+}
+.q-btn.active,
+.q-btn--active {
+  background: var(--q-accent-dim);
+  border-color: var(--q-accent);
+  color: var(--q-text-bright);
+  font-weight: 600;
+}
+
+/* Tab-style button row */
+.q-btn-row {
+  display: flex;
+  gap: var(--q-gap-xs);
+}
+.q-btn-row .q-btn { flex: 1; text-align: center; }
+
+/* ── Sliders ──────────────────────────────────────────────────── */
+.q-slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.q-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.q-slider-name {
+  font-size: var(--q-size-sm);
+  color: var(--q-text);
+}
+.q-slider-val {
+  font-family: var(--q-font-mono);
+  font-size: var(--q-size-sm);
+  color: var(--q-accent);
+}
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--q-accent);
+  cursor: pointer;
+}
+
+/* ── Select ───────────────────────────────────────────────────── */
+select {
+  width: 100%;
+  background: var(--q-surface-2);
+  border: 1px solid var(--q-border);
+  color: var(--q-text);
+  padding: 5px 8px;
+  border-radius: var(--q-radius-sm);
+  font-family: var(--q-font);
+  font-size: var(--q-size-sm);
+  cursor: pointer;
+}
+select:focus { outline: none; border-color: var(--q-accent); }
+
+/* ── Info badge / stat card ───────────────────────────────────── */
+.q-stat {
+  background: rgba(40, 80, 180, 0.12);
+  border: 1px solid var(--q-border);
+  border-radius: var(--q-radius-md);
+  padding: 8px 12px;
+}
+.q-stat__label {
+  font-size: var(--q-size-xs);
+  font-family: var(--q-font-mono);
+  color: var(--q-muted-2);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 2px;
+}
+.q-stat__value {
+  font-family: var(--q-font-mono);
+  font-size: var(--q-size-xl);
+  font-weight: 700;
+  color: var(--q-text-bright);
+}
+
+/* ── HUD overlay (on-canvas info) ─────────────────────────────── */
+.q-hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 10;
+}
+.q-hud-item {
+  background: var(--q-overlay);
+  border: 1px solid var(--q-border);
+  border-radius: var(--q-radius-sm);
+  padding: 3px 9px;
+  font-family: var(--q-font-mono);
+  font-size: var(--q-size-xs);
+  color: var(--q-text);
+  backdrop-filter: blur(6px);
+}
+
+/* ── Tooltip ──────────────────────────────────────────────────── */
+.q-tooltip {
+  background: var(--q-overlay);
+  border: 1px solid var(--q-border-2);
+  border-radius: var(--q-radius-md);
+  padding: 6px 10px;
+  font-size: var(--q-size-sm);
+  color: var(--q-text);
+  box-shadow: var(--q-shadow-md);
+  backdrop-filter: blur(10px);
+}
+
+/* ── Scrollbar styling ────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--q-muted); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--q-accent); }
+
+/* ── Utility classes ──────────────────────────────────────────── */
+.q-mono    { font-family: var(--q-font-mono); }
+.q-muted   { color: var(--q-muted); }
+.q-accent  { color: var(--q-accent); }
+.q-cyan    { color: var(--q-cyan); }
+.q-green   { color: var(--q-green); }
+.q-orange  { color: var(--q-orange); }
+.q-purple  { color: var(--q-purple); }
+.q-text-xs { font-size: var(--q-size-xs); }
+.q-text-sm { font-size: var(--q-size-sm); }
+.q-text-md { font-size: var(--q-size-md); }
