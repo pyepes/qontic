@@ -57,6 +57,7 @@ jobs:
           mkdir -p _site/apps/comparative/measurement
           cp -r apps/comparative/measurement/dist/* _site/apps/comparative/measurement/
 
+          python3 scripts/inject-feedback.py . _site
           python3 scripts/inject-analytics.py . _site
 
       - name: Configure Pages
