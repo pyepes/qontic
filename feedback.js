@@ -50,7 +50,7 @@
   const button = document.createElement("button");
   button.type = "button";
   button.className = "qontic-feedback-button";
-  button.textContent = "Give feedback";
+  button.textContent = "Feedback";
   widget.appendChild(button);
 
   function openTarget(target) {
